@@ -397,3 +397,27 @@ def join_queue(player_id: int, db: Session) -> WaitingList:
 def leave_queue(player_id: int, db: Session) -> None:
     _remove_from_queue(db, player_id)
     broadcast_update("queue_update")
+
+
+def leave_game(player_id: int, game_id: int, db: Session) -> None:
+    """Allow a confirmed player to leave an active game mid-play."""
+    slot = (
+        db.query(GameSlot)
+        .filter(GameSlot.game_id == game_id, GameSlot.player_id == player_id)
+        .first()
+    )
+    if not slot or slot.status != SlotStatus.CONFIRMED:
+        raise LookupError("No active confirmed slot found for this player in this game.")
+
+    game = db.query(Game).filter(Game.id == game_id).first()
+    if not game or game.status not in (GameStatus.OPEN, GameStatus.IN_PROGRESS):
+        raise LookupError("Game is not active.")
+
+    slot.status = SlotStatus.WITHDRAWN
+    slot.responded_at = datetime.utcnow()
+    db.flush()
+
+    _append_to_queue(db, player_id)
+    fill_slot(db, game)
+    logger.info(f"Player {player_id} withdrew from game {game_id} mid-play.")
+    broadcast_update("game_update")

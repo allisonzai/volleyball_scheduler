@@ -1,9 +1,12 @@
-import type { Game } from "../types";
+import type { Game, Player } from "../types";
 import PlayerBadge from "./PlayerBadge";
+import { leaveGame } from "../api/client";
 
 interface Props {
   game: Game | null;
   currentPlayerId?: number | null;
+  currentPlayer?: Player | null;
+  onRefresh: () => void;
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -12,7 +15,17 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   finished: { label: "Game finished", color: "text-gray-400" },
 };
 
-export default function CourtView({ game, currentPlayerId }: Props) {
+export default function CourtView({ game, currentPlayerId, currentPlayer, onRefresh }: Props) {
+  const handleLeaveGame = async () => {
+    if (!currentPlayer || !game) return;
+    if (!confirm("Leave the current game? You'll be moved to the end of the waiting list.")) return;
+    try {
+      await leaveGame(game.id, currentPlayer.secret_token);
+      onRefresh();
+    } catch {
+      alert("Could not leave the game.");
+    }
+  };
   if (!game) {
     return (
       <div className="bg-white rounded-2xl shadow p-6 text-center text-gray-400">
@@ -40,12 +53,23 @@ export default function CourtView({ game, currentPlayerId }: Props) {
           </h3>
           <div className="grid grid-cols-2 gap-2">
             {confirmed.map((slot) => (
-              <PlayerBadge
-                key={slot.id}
-                displayName={slot.display_name}
-                signupNumber={slot.signup_number}
-                highlight={slot.player_id === currentPlayerId}
-              />
+              <div key={slot.id} className="flex items-center gap-2">
+                <div className="flex-1">
+                  <PlayerBadge
+                    displayName={slot.display_name}
+                    signupNumber={slot.signup_number}
+                    highlight={slot.player_id === currentPlayerId}
+                  />
+                </div>
+                {slot.player_id === currentPlayerId && (
+                  <button
+                    onClick={handleLeaveGame}
+                    className="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded border border-red-200 hover:border-red-400 transition"
+                  >
+                    Leave
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         </div>

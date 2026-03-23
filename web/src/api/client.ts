@@ -52,6 +52,8 @@ export const startGame = (operatorSecret: string) =>
   api.post("/games/start", null, { headers: { "X-Operator-Secret": operatorSecret } }).then((r) => r.data);
 export const endGame = (id: number, operatorSecret: string) =>
   api.post(`/games/${id}/end`, null, { headers: { "X-Operator-Secret": operatorSecret } }).then((r) => r.data);
+export const leaveGame = (gameId: number, secretToken: string) =>
+  api.post(`/games/${gameId}/leave`, null, { headers: { "X-Player-Token": secretToken } });
 
 // Confirmation
 export const confirm = (player_id: number, game_id: number, response: string, secret_token: string) =>

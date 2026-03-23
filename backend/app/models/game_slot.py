@@ -12,6 +12,7 @@ class SlotStatus(str, Enum):
     CONFIRMED = "confirmed"
     DECLINED = "declined"
     TIMED_OUT = "timed_out"
+    WITHDRAWN = "withdrawn"
 
 
 class GameSlot(Base):

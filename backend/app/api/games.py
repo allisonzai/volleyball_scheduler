@@ -109,6 +109,29 @@ def start_game(
     return _game_to_schema(game, db)
 
 
+@router.post("/{game_id}/leave", status_code=204)
+def leave_game(
+    game_id: int,
+    x_player_token: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    from app.models.game_slot import GameSlot
+    if not x_player_token:
+        raise HTTPException(401, "Missing player token.")
+    # Find the player by token
+    from app.models.player import Player
+    import secrets as _secrets
+    players = db.query(Player).all()
+    player = next((p for p in players if _secrets.compare_digest(p.secret_token, x_player_token)), None)
+    if not player:
+        raise HTTPException(401, "Invalid player token.")
+    try:
+        scheduler.leave_game(player.id, game_id, db)
+    except LookupError as e:
+        raise HTTPException(400, str(e))
+    db.commit()
+
+
 @router.post("/{game_id}/end", response_model=GameOut)
 def end_game(
     game_id: int,
