@@ -750,19 +750,19 @@ class TestScenario13_DisplayNames:
     def test_display_name_format(self, db):
         p = make_player(db, 1, first="Alice", last="Smith")
         db.commit()
-        assert p.display_name == "Alice S.", f"Expected 'Alice S.' got '{p.display_name}'"
+        assert p.display_name == "Alice S", f"Expected 'Alice S' got '{p.display_name}'"
 
     def test_duplicate_names_get_phone_suffix(self, db):
         p1 = make_player(db, 1, first="Alice", last="Smith")
         db.commit()
-        assert p1.display_name == "Alice S."
+        assert p1.display_name == "Alice S"
 
         p2 = make_player(db, 2, first="Alice", last="Sutton")
         db.commit()
-        # Both have "Alice S." base — p2 should get a suffix, p1 should be updated
-        assert p2.display_name != "Alice S.", "Duplicate name should have suffix"
+        # Both have "Alice S" base — p2 should get a suffix, p1 should be updated
+        assert p2.display_name != "Alice S", "Duplicate name should have suffix"
         db.refresh(p1)
-        assert p1.display_name != "Alice S." or p2.display_name != "Alice S.", (
+        assert p1.display_name != "Alice S" or p2.display_name != "Alice S", (
             "At least one duplicate must be disambiguated"
         )
 
@@ -770,8 +770,8 @@ class TestScenario13_DisplayNames:
         p1 = make_player(db, 1, first="Alice", last="Smith")
         p2 = make_player(db, 2, first="Bob", last="Jones")
         db.commit()
-        assert p1.display_name == "Alice S."
-        assert p2.display_name == "Bob J."
+        assert p1.display_name == "Alice S"
+        assert p2.display_name == "Bob J"
 
     def test_disambiguation_uses_phone_last_digits(self, db):
         make_player(db, 42, first="Alice", last="Smith")
@@ -779,9 +779,9 @@ class TestScenario13_DisplayNames:
         p2 = make_player(db, 89, first="Alice", last="Sutton")
         db.commit()
 
-        # p2's phone ends in '89', should be "Alice S. 89."
-        assert "89" in p2.display_name, (
-            f"Phone suffix '89' should appear in display name, got '{p2.display_name}'"
+        # p2's phone ends in '0089', should contain '0089'
+        assert "0089" in p2.display_name, (
+            f"Phone suffix '0089' should appear in display name, got '{p2.display_name}'"
         )
 
     def test_three_same_initials_all_unique(self, db):
