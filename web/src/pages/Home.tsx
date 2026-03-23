@@ -212,7 +212,7 @@ export default function Home() {
               <div className="text-center py-12 text-gray-400">Loading…</div>
             ) : (
               <>
-                <CourtView game={game} currentPlayerId={player?.id} currentPlayer={player} onRefresh={refresh} />
+                <CourtView game={game} currentPlayerId={player?.id} currentPlayer={player} timeoutSeconds={timeoutSeconds} onRefresh={refresh} />
                 <WaitingListView
                   queue={queue}
                   currentPlayerId={player?.id}
