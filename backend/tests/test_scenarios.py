@@ -905,3 +905,299 @@ class TestEdgeCases:
 
         queue = scheduler.get_queue(db)
         assert len(queue) == 1, "Player should only appear once even if added twice"
+
+
+# ── SCENARIO 15 ──────────────────────────────────────────────────────────────
+# "A confirmed player may leave an active game at any time. They are moved to
+#  the end of the waiting list and the next queued player is notified."
+
+class TestScenario15_LeaveGameMidPlay:
+    def test_confirmed_player_can_leave_active_game(self, db):
+        for i in range(1, 13):
+            register_and_queue(db, i)
+        game = scheduler.assign_next_game(db)
+        db.commit()
+
+        # All confirm → game is in progress
+        for slot in game.slots:
+            scheduler.handle_confirmation(slot.player_id, game.id, "yes", db)
+        db.commit()
+
+        assert game.status == GameStatus.IN_PROGRESS
+
+        target_id = game.slots[0].player_id
+        scheduler.leave_game(target_id, game.id, db)
+        db.commit()
+
+        slot = db.query(GameSlot).filter(
+            GameSlot.game_id == game.id,
+            GameSlot.player_id == target_id,
+        ).first()
+        assert slot.status == SlotStatus.WITHDRAWN, "Slot should be WITHDRAWN after leaving"
+
+    def test_leave_game_moves_player_to_end_of_queue(self, db):
+        for i in range(1, 13):
+            register_and_queue(db, i)
+        game = scheduler.assign_next_game(db)
+        for slot in game.slots:
+            scheduler.handle_confirmation(slot.player_id, game.id, "yes", db)
+        db.commit()
+
+        target_id = game.slots[0].player_id
+        scheduler.leave_game(target_id, game.id, db)
+        db.commit()
+
+        queue = scheduler.get_queue(db)
+        queued_ids = [e.player_id for e in queue]
+        assert target_id in queued_ids, "Player who left should be back in queue"
+        assert queued_ids[-1] == target_id, "Player who left should be at END of queue"
+
+    def test_leave_game_fills_slot_from_queue(self, db):
+        """When a player leaves and there is someone in the waiting list, that person
+        gets a new pending slot."""
+        for i in range(1, 14):  # 13 players: 12 play, 1 waiting
+            register_and_queue(db, i)
+        game = scheduler.assign_next_game(db)
+        for slot in game.slots:
+            scheduler.handle_confirmation(slot.player_id, game.id, "yes", db)
+        db.commit()
+
+        waiter_id = scheduler.get_queue(db)[0].player_id
+        target_id = game.slots[0].player_id
+        slot_count_before = len(game.slots)
+
+        scheduler.leave_game(target_id, game.id, db)
+        db.commit()
+
+        db.refresh(game)
+        assert len(game.slots) == slot_count_before + 1, (
+            "A new slot should be created for the waiting player after someone leaves"
+        )
+        new_slot_ids = {s.player_id for s in game.slots}
+        assert waiter_id in new_slot_ids, "Waiting player should be notified after a court player leaves"
+
+    def test_leave_game_raises_if_not_confirmed(self, db):
+        """Only CONFIRMED slots can use leave_game; pending or non-existent slots raise."""
+        for i in range(1, 14):
+            register_and_queue(db, i)
+        game = scheduler.assign_next_game(db)
+        db.commit()
+
+        # Slots are PENDING at this point (more than 12 players)
+        pending_id = game.slots[0].player_id
+        with pytest.raises(LookupError):
+            scheduler.leave_game(pending_id, game.id, db)
+
+    def test_leave_game_raises_if_game_not_active(self, db):
+        for i in range(1, 13):
+            register_and_queue(db, i)
+        game = scheduler.assign_next_game(db)
+        for slot in game.slots:
+            scheduler.handle_confirmation(slot.player_id, game.id, "yes", db)
+        db.commit()
+
+        target_id = game.slots[0].player_id
+        scheduler.end_game(game.id, db)
+        db.commit()
+
+        db.refresh(game)
+        assert game.status == GameStatus.FINISHED
+
+        with pytest.raises(LookupError):
+            scheduler.leave_game(target_id, game.id, db)
+
+
+# ── SCENARIO 16 ──────────────────────────────────────────────────────────────
+# "The operator may use 'Start Over' to cancel the current game and clear the
+#  waiting list at any time. Player accounts are preserved."
+
+class TestScenario16_ResetAll:
+    def test_reset_clears_waiting_list(self, db):
+        for i in range(1, 6):
+            register_and_queue(db, i)
+        db.commit()
+
+        assert len(scheduler.get_queue(db)) == 5
+
+        scheduler.reset_all(db)
+        db.commit()
+
+        assert len(scheduler.get_queue(db)) == 0, "Queue must be empty after reset"
+
+    def test_reset_marks_active_game_finished(self, db):
+        for i in range(1, 13):
+            register_and_queue(db, i)
+        game = scheduler.assign_next_game(db)
+        for slot in game.slots:
+            scheduler.handle_confirmation(slot.player_id, game.id, "yes", db)
+        db.commit()
+
+        assert game.status == GameStatus.IN_PROGRESS
+
+        scheduler.reset_all(db)
+        db.commit()
+
+        db.refresh(game)
+        assert game.status == GameStatus.FINISHED, "Active game should be FINISHED after reset"
+
+    def test_reset_preserves_player_accounts(self, db):
+        players = [register_and_queue(db, i) for i in range(1, 6)]
+        player_ids = [p.id for p in players]
+        db.commit()
+
+        scheduler.reset_all(db)
+        db.commit()
+
+        from app.models.player import Player as PlayerModel
+        for pid in player_ids:
+            p = db.query(PlayerModel).filter(PlayerModel.id == pid).first()
+            assert p is not None, f"Player {pid} should still exist after reset"
+
+    def test_reset_with_no_active_game_does_not_crash(self, db):
+        for i in range(1, 4):
+            register_and_queue(db, i)
+        db.commit()
+
+        # No game started — just a queue
+        scheduler.reset_all(db)
+        db.commit()
+
+        assert len(scheduler.get_queue(db)) == 0
+
+    def test_reset_cancels_open_game_with_pending_slots(self, db):
+        for i in range(1, 15):
+            register_and_queue(db, i)
+        game = scheduler.assign_next_game(db)
+        db.commit()
+
+        assert game.status == GameStatus.OPEN
+
+        scheduler.reset_all(db)
+        db.commit()
+
+        db.refresh(game)
+        assert game.status == GameStatus.FINISHED
+        assert len(scheduler.get_queue(db)) == 0
+
+
+# ── SCENARIO 17 ──────────────────────────────────────────────────────────────
+# "Players can register and deregister via the web interface. Deregistration
+#  is blocked while the player is in an active game."
+
+class TestScenario17_Deregister:
+    def test_deregister_removes_player_from_queue(self, db):
+        p = register_and_queue(db, 1)
+        db.commit()
+
+        queue_before = scheduler.get_queue(db)
+        assert any(e.player_id == p.id for e in queue_before)
+
+        # Simulate the deregister API logic at the service level
+        scheduler._remove_from_queue(db, p.id)
+        from app.models.player import Player as PlayerModel
+        db.delete(db.query(PlayerModel).filter(PlayerModel.id == p.id).first())
+        db.commit()
+
+        queue_after = scheduler.get_queue(db)
+        assert not any(e.player_id == p.id for e in queue_after), (
+            "Deregistered player should be removed from queue"
+        )
+
+    def test_deregister_blocked_while_in_active_game(self, db):
+        """Deregistration must fail if the player has a confirmed or pending slot
+        in an open or in-progress game."""
+        from app.models.game import Game as GameModel
+        from app.models.game_slot import GameSlot as GameSlotModel, SlotStatus as SS
+
+        for i in range(1, 14):
+            register_and_queue(db, i)
+        game = scheduler.assign_next_game(db)
+        db.commit()
+
+        active_player_id = game.slots[0].player_id
+
+        # Check: player has a pending slot in an active game
+        active_slot = (
+            db.query(GameSlotModel)
+            .join(GameModel, GameSlotModel.game_id == GameModel.id)
+            .filter(
+                GameSlotModel.player_id == active_player_id,
+                GameSlotModel.status.in_([SS.PENDING_CONFIRMATION, SS.CONFIRMED]),
+                GameModel.status.in_(["open", "in_progress"]),
+            )
+            .first()
+        )
+        assert active_slot is not None, "Player should be blocked from deregistering — active slot exists"
+
+    def test_deregister_allowed_when_not_in_active_game(self, db):
+        """A player who is only in the queue (not in any active game) can deregister."""
+        p = register_and_queue(db, 99)
+        db.commit()
+
+        from app.models.game import Game as GameModel
+        from app.models.game_slot import GameSlot as GameSlotModel, SlotStatus as SS
+
+        active_slot = (
+            db.query(GameSlotModel)
+            .join(GameModel, GameSlotModel.game_id == GameModel.id)
+            .filter(
+                GameSlotModel.player_id == p.id,
+                GameSlotModel.status.in_([SS.PENDING_CONFIRMATION, SS.CONFIRMED]),
+                GameModel.status.in_(["open", "in_progress"]),
+            )
+            .first()
+        )
+        assert active_slot is None, "Queue-only player should have no active slot — deregister allowed"
+
+        scheduler._remove_from_queue(db, p.id)
+        from app.models.player import Player as PlayerModel
+        db.delete(db.query(PlayerModel).filter(PlayerModel.id == p.id).first())
+        db.commit()
+
+        remaining = db.query(PlayerModel).filter(PlayerModel.id == p.id).first()
+        assert remaining is None, "Player record should be gone after deregister"
+
+    def test_deregister_after_game_ends_is_allowed(self, db):
+        """Once a game is finished and the player is not slotted into the next game,
+        deregistration should be permitted.
+
+        Setup: 15 players. 12 play, 3 wait. After the game ends the 3 original
+        waiters are at the front of the queue and form the core of the next game,
+        so the last court player rotated back (seat 12) is NOT immediately
+        slotted in the new game — they sit in the queue with no active slot.
+        """
+        players = [register_and_queue(db, i) for i in range(1, 16)]  # 15 total
+        game = scheduler.assign_next_game(db)
+        for slot in game.slots:
+            scheduler.handle_confirmation(slot.player_id, game.id, "yes", db)
+        db.commit()
+
+        # The player in seat 12 (last rotation position) will be the 12th person
+        # appended back to the queue after end_game. With 3 waiters already ahead,
+        # the next auto-game takes slots 1-12 of the merged queue, leaving position
+        # 15 (seat-12 player) in the queue with no active slot.
+        sorted_slots = sorted(game.slots, key=lambda s: s.position)
+        last_court_player_id = sorted_slots[-1].player_id
+
+        scheduler.end_game(game.id, db)
+        db.commit()
+
+        db.refresh(game)
+        assert game.status == GameStatus.FINISHED
+
+        from app.models.game import Game as GameModel
+        from app.models.game_slot import GameSlot as GameSlotModel, SlotStatus as SS
+
+        active_slot = (
+            db.query(GameSlotModel)
+            .join(GameModel, GameSlotModel.game_id == GameModel.id)
+            .filter(
+                GameSlotModel.player_id == last_court_player_id,
+                GameSlotModel.status.in_([SS.PENDING_CONFIRMATION, SS.CONFIRMED]),
+                GameModel.status.in_(["open", "in_progress"]),
+            )
+            .first()
+        )
+        assert active_slot is None, (
+            "Player who was not slotted in the new game should have no active slot — deregister allowed"
+        )

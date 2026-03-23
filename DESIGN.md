@@ -31,6 +31,9 @@ Volleyball Scheduler is a full-stack application that manages recreational volle
 | Mobile App | React Native · Expo | iOS and Android interface |
 | SMS | Twilio (stubbed by default) | Confirmation notifications |
 | Push Notifications | Expo Push API (stubbed by default) | In-app alerts |
+| Email | Resend HTTP API (stubbed by default) | Future use; currently auto-verify skips email |
+| Backend hosting | PythonAnywhere (free tier, WSGI) | Production backend |
+| Frontend hosting | Vercel | Production web frontend |
 
 ---
 
@@ -52,8 +55,10 @@ The following rules are taken directly from the specification.
 | R10 | Responding **no** removes the player from the current game and places them at the end of the waiting list. The next person is notified. |
 | R11 | Responding **defer** places the player at the front of the waiting list. The next person is notified. |
 | R12 | Confirmation can be sent by typing or clicking **yes**, **no**, or **defer**. |
-| R13 | Players are displayed as "FirstName L." — duplicates are disambiguated using the last digits of their phone number. |
+| R13 | Players are displayed as "FirstName L" — duplicates are disambiguated by appending the last 4 digits of their phone number in brackets, e.g. `Alice J [4242]`. |
 | R14 | Every player on the court and waiting list is shown alongside their signup number. |
+| R7a | A confirmed player may leave an active game at any time. They are moved to the end of the waiting list and the next queued player is notified. |
+| R7b | The operator may "Start Over" to cancel the active game and clear the waiting list. Player accounts are preserved. |
 
 ---
 
@@ -103,7 +108,9 @@ The following rules are taken directly from the specification.
 volleyball_scheduler/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py               # App factory, CORS, lifespan hook
+│   ├── wsgi.py               # PythonAnywhere WSGI entry (lazy ASGIMiddleware)
+│   ├── app/
+│   │   ├── main.py               # App factory, CORS, init_db() at import time
 │   │   ├── config.py             # Pydantic Settings (env vars)
 │   │   ├── database.py           # SQLAlchemy engine, session, Base
 │   │   ├── models/
@@ -116,18 +123,19 @@ volleyball_scheduler/
 │   │   │   ├── game.py
 │   │   │   └── queue.py
 │   │   ├── api/
-│   │   │   ├── players.py        # /api/players routes
+│   │   │   ├── players.py        # /api/players routes (incl. DELETE deregister)
 │   │   │   ├── queue.py          # /api/queue routes
-│   │   │   ├── games.py          # /api/games routes
+│   │   │   ├── games.py          # /api/games routes (incl. /reset, /{id}/leave)
 │   │   │   ├── notifications.py  # /api/confirm + /api/sms/webhook
-│   │   │   └── events.py         # /api/events (SSE stream)
+│   │   │   └── events.py         # /api/events (SSE — backend only; not used by web)
 │   │   ├── services/
-│   │   │   ├── scheduler.py      # Core scheduling engine
+│   │   │   ├── scheduler.py      # Core scheduling engine (threading.Timer timeouts)
 │   │   │   ├── display_name.py   # Display name generation + dedup
 │   │   │   ├── notifications.py  # Orchestrates SMS + push
 │   │   │   ├── sms.py            # Twilio adapter
-│   │   │   └── push.py           # Expo push adapter
-│   │   └── tasks/                # (reserved for future async workers)
+│   │   │   ├── push.py           # Expo push adapter
+│   │   │   ├── email.py          # Resend HTTP API adapter
+│   │   │   └── password.py       # PBKDF2-SHA256 hash/verify
 │   ├── tests/
 │   │   └── test_scenarios.py     # 64 scenario-driven unit tests
 │   ├── requirements.txt
@@ -144,7 +152,7 @@ volleyball_scheduler/
 │   │   │   ├── PlayerBadge.tsx
 │   │   │   └── PlayerRegistration.tsx
 │   │   ├── hooks/
-│   │   │   ├── useGameState.ts   # SSE + polling hook
+│   │   │   ├── useGameState.ts   # 5-second polling hook (SSE removed for WSGI compat)
 │   │   │   └── usePlayer.ts      # localStorage-persisted player
 │   │   └── pages/Home.tsx        # Single-page layout
 │   └── package.json
@@ -178,6 +186,8 @@ volleyball_scheduler/
 │ phone           VARCHAR(20) UNIQUE   │
 │ email           VARCHAR(200) UNIQUE  │
 │ display_name    VARCHAR(150)         │
+│ password_hash   VARCHAR(256)         │
+│ is_verified     BOOLEAN default TRUE │
 │ expo_push_token VARCHAR(200) NULL    │
 │ created_at      DATETIME             │
 └──────┬───────────────────────────────┘
@@ -208,6 +218,7 @@ volleyball_scheduler/
 │                   confirmed             │
 │                   declined              │
 │                   timed_out             │
+│                   withdrawn             │
 │ notified_at     DATETIME NULL           │
 │ responded_at    DATETIME NULL           │
 └──────────────┬──────────────────────────┘
@@ -261,6 +272,10 @@ NONE ─────────────────────────
                     │ yes             │ no / defer        │ timeout
                     ▼                 ▼                   ▼
                CONFIRMED          DECLINED           TIMED_OUT
+                    │
+                    │ leave_game()
+                    ▼
+               WITHDRAWN
 ```
 
 ---
@@ -382,7 +397,42 @@ for each confirmed player (in seat order):
 assign_next_game(db)               # auto-start next game from updated queue
 ```
 
-### 5.6 Queue Position Management
+### 5.6 Player Leaves Mid-Game: `leave_game(player_id, game_id, db)`
+
+Called when a confirmed player voluntarily exits an active game (R7a).
+
+```
+load slot for (player_id, game_id)
+if slot not found or slot.status != CONFIRMED:
+    raise LookupError
+
+load game; if game.status not in (OPEN, IN_PROGRESS):
+    raise LookupError
+
+slot.status = WITHDRAWN
+slot.responded_at = now()
+
+append player to END of queue
+fill_slot(db, game)                # notify next waiting player
+```
+
+### 5.7 Reset All: `reset_all(db)`
+
+Operator-triggered "Start Over" that wipes the active game and queue (R7b).
+
+```
+cancel all pending timeout timers
+_timeout_tasks.clear()
+
+for each game with status in (OPEN, IN_PROGRESS):
+    game.status = FINISHED
+    game.ended_at = now()
+
+delete all WaitingList rows
+# Player accounts are NOT deleted
+```
+
+### 5.8 Queue Position Management
 
 The `WaitingList` table uses two independent numbers per entry:
 
@@ -399,11 +449,13 @@ After every structural change (add, remove, prepend), `_resequence()` renumbers 
 
 ### Players
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/players` | Register a new player. Returns 400 if phone or email already registered. |
-| `GET` | `/api/players/{id}` | Get a player's profile. |
-| `PATCH` | `/api/players/{id}/push-token` | Update the player's Expo push token. |
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/players` | None | Register a new player. Returns 400 if phone or email already registered. Players are auto-verified. |
+| `POST` | `/api/players/signin` | None | Sign in with phone + password. Returns player object with secret token. |
+| `GET` | `/api/players/{id}` | None | Get a player's profile. |
+| `DELETE` | `/api/players/{id}` | `X-Player-Token` | Permanently deregister. Returns 400 if player has active game slot. |
+| `PATCH` | `/api/players/{id}/push-token` | None | Update the player's Expo push token. |
 
 **Register request body:**
 ```json
@@ -411,23 +463,32 @@ After every structural change (add, remove, prepend), `_resequence()` renumbers 
   "first_name": "Alice",
   "last_name": "Smith",
   "phone": "+12125551234",
-  "email": "alice@example.com"
+  "email": "alice@example.com",
+  "password": "secret123"
+}
+```
+
+**Sign-in request body:**
+```json
+{
+  "phone": "+12125551234",
+  "password": "secret123"
 }
 ```
 
 ### Queue
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/queue` | Return the waiting list ordered by position. |
-| `POST` | `/api/queue/join` | Add a player to the end of the queue. Body: `{"player_id": 1}`. |
-| `DELETE` | `/api/queue/{player_id}` | Remove a player from the queue. |
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/queue` | None | Return the waiting list ordered by position. |
+| `POST` | `/api/queue/join` | `X-Player-Token` | Add a player to the end of the queue. Body: `{"player_id": 1}`. |
+| `DELETE` | `/api/queue/{player_id}` | `X-Player-Token` | Remove a player from the queue. |
 
 **Queue entry response:**
 ```json
 {
   "player_id": 3,
-  "display_name": "Alice S.",
+  "display_name": "Alice S",
   "signup_number": 3,
   "position": 1,
   "joined_at": "2026-03-22T10:00:00"
@@ -436,13 +497,15 @@ After every structural change (add, remove, prepend), `_resequence()` renumbers 
 
 ### Games
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/games/current` | Return the active game (OPEN or IN_PROGRESS), or `null`. |
-| `GET` | `/api/games` | List all games. Optional `?status=` filter. |
-| `GET` | `/api/games/{id}` | Get a specific game with all its slots. |
-| `POST` | `/api/games/start` | Operator: create and populate the next game from the queue. |
-| `POST` | `/api/games/{id}/end` | Operator: mark a game finished and trigger rotation. |
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/games/current` | None | Return the active game (OPEN or IN_PROGRESS), or `null`. |
+| `GET` | `/api/games` | None | List all games. Optional `?status=` filter. |
+| `GET` | `/api/games/{id}` | None | Get a specific game with all its slots. |
+| `POST` | `/api/games/start` | `X-Operator-Secret` | Create and populate the next game from the queue. |
+| `POST` | `/api/games/{id}/end` | `X-Operator-Secret` | Mark a game finished and trigger rotation. |
+| `POST` | `/api/games/reset` | `X-Operator-Secret` | Cancel active game and clear waiting list (Start Over). |
+| `POST` | `/api/games/{id}/leave` | `X-Player-Token` | Confirmed player leaves an active game mid-play. |
 
 **Game response:**
 ```json
@@ -459,7 +522,7 @@ After every structural change (add, remove, prepend), `_resequence()` renumbers 
       "player_id": 1,
       "position": 1,
       "status": "confirmed",
-      "display_name": "Alice S.",
+      "display_name": "Alice S",
       "signup_number": 1
     }
   ]
@@ -486,9 +549,11 @@ After every structural change (add, remove, prepend), `_resequence()` renumbers 
 
 ### Real-time Events
 
+> **Note:** The SSE endpoint exists in the backend but is **not used** by the web frontend. PythonAnywhere's WSGI adapter (a2wsgi) would block a worker thread for every open SSE connection. The web app uses 5-second polling instead.
+
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/events` | Server-Sent Events stream. |
+| `GET` | `/api/events` | Server-Sent Events stream (available but unused by current clients). |
 
 Events are plain strings wrapped in the SSE `data:` format:
 - `data: connected` — on initial connect
@@ -529,15 +594,16 @@ Backend
 
 ### 7.3 Timeout Management
 
-Confirmation timeouts are managed as in-process async tasks:
+Confirmation timeouts are managed with `threading.Timer` (not asyncio). This is required for compatibility with PythonAnywhere's WSGI/uWSGI environment, where asyncio tasks do not survive the uWSGI fork process.
 
 - When a slot is created, `_schedule_timeout(player_id, game_id)` is called.
-- The task runs `asyncio.sleep(CONFIRM_TIMEOUT_SECONDS)` then calls `handle_timeout()`.
-- Tasks are stored in `_timeout_tasks: dict[(player_id, game_id), Future]`.
-- When a player responds (any answer), `_cancel_timeout(player_id, game_id)` cancels the pending task.
-- The main asyncio event loop is captured at startup via `set_event_loop()` so that synchronous FastAPI route handlers (which run in worker threads) can schedule coroutines via `asyncio.run_coroutine_threadsafe()`.
+- A `threading.Timer(CONFIRM_TIMEOUT_SECONDS, _timeout_job)` is started. The timer is daemon-mode so it doesn't prevent server shutdown.
+- `_timeout_job` opens a new DB session, calls `handle_timeout()`, commits, then closes the session.
+- Timers are stored in `_timeout_tasks: dict[(player_id, game_id), Timer]`.
+- When a player responds (any answer), `_cancel_timeout(player_id, game_id)` calls `timer.cancel()`.
+- `reset_all()` cancels all pending timers and clears `_timeout_tasks`.
 
-**Limitation:** In-process tasks do not survive a server restart. If the server restarts while a game is in confirmation, the 5-minute clocks reset. For production, these could be replaced with a persistent task queue (e.g., ARQ + Redis).
+**Limitation:** In-process timers do not survive a server restart. If the server restarts while a game is in confirmation, the 5-minute clocks reset. For production, these could be replaced with a persistent task queue (e.g., ARQ + Redis).
 
 ---
 
@@ -578,6 +644,7 @@ Built with React 18, Vite, and Tailwind CSS. Single-page application served on p
 │  ──── Operator Controls ────       │
 │  [ Start New Game ]                │
 │  [ End Game #3 ]                   │
+│  [ Start Over ]                    │
 └────────────────────────────────────┘
 ```
 
@@ -585,10 +652,7 @@ Built with React 18, Vite, and Tailwind CSS. Single-page application served on p
 
 Player identity is stored in `localStorage` (via `usePlayer` hook) and persists across page reloads. No authentication is implemented; the app operates on a trusted local network model.
 
-Live game state is fetched via the `useGameState` hook, which:
-1. Establishes an SSE connection to `/api/events`.
-2. Calls `refresh()` on every received event.
-3. Falls back to a 5-second polling interval if SSE is unavailable.
+Live game state is fetched via the `useGameState` hook, which polls `/api/games/current` and `/api/queue` every 5 seconds. SSE was removed because PythonAnywhere's WSGI adapter would block one worker per open connection.
 
 ### 8.2 Mobile Application
 
@@ -627,31 +691,38 @@ Built with React Native and Expo, using Expo Router for file-based navigation. S
 
 ## 9. Real-time Updates
 
-### Architecture
+### Current Architecture (Polling)
+
+The web client polls every 5 seconds:
 
 ```
-State change (join queue, confirm, end game, etc.)
-         │
-         ▼
-  scheduler.broadcast_update("game_update")
-         │
-         ▼
-  _sse_subscribers: list[asyncio.Queue]
-         │
-         ├─── Queue for Client A ──► SSE stream ──► Browser A
-         ├─── Queue for Client B ──► SSE stream ──► Browser B
-         └─── Queue for Client C ──► SSE stream ──► Browser C
+Browser
+  every 5 s ──► GET /api/games/current
+  every 5 s ──► GET /api/queue
 ```
 
-Each connected browser or web client maintains a persistent HTTP connection to `GET /api/events`. Each connection subscribes an `asyncio.Queue(maxsize=100)` to the global `_sse_subscribers` list. When `broadcast_update` is called from any scheduler function, the event string is placed into every subscriber's queue. Each SSE generator coroutine reads from its queue and yields the event.
+SSE (`GET /api/events`) is implemented in the backend and the `broadcast_update` helper still fires on state changes, but **no web client subscribes to it** because PythonAnywhere's WSGI adapter would block a worker thread per open connection indefinitely.
 
-### Keepalive
+### SSE Backend (Available, Unused by Web)
 
-A 30-second `asyncio.wait_for` timeout triggers a `": keepalive\n\n"` comment line (ignored by clients but prevents proxy connection timeouts).
+The SSE infrastructure remains in `app/api/events.py` and `scheduler.broadcast_update()`. It can be re-enabled for clients that run against a proper ASGI server (uvicorn direct, not behind a2wsgi):
 
-### Client Behavior
+```
+State change
+     │
+     ▼
+scheduler.broadcast_update("game_update")
+     │
+     ▼
+_sse_subscribers: list[asyncio.Queue]
+     │
+     ├─── Queue for Client A ──► SSE stream ──► Browser A
+     └─── …
+```
 
-On receiving any SSE event, the client calls `refresh()`, which re-fetches `/api/games/current` and `/api/queue` in parallel. The client does not parse event payloads — all updates are treated as a full-refresh trigger.
+### Mobile
+
+The mobile app also uses 5-second polling (no SSE).
 
 ---
 
@@ -659,17 +730,31 @@ On receiving any SSE event, the client calls `refresh()`, which re-fetches `/api
 
 All configuration is read from environment variables (or a `.env` file) via Pydantic `BaseSettings`.
 
+**Backend (`.env`):**
+
 | Variable | Default | Description |
 |---|---|---|
 | `DATABASE_URL` | `sqlite:///./volleyball.db` | SQLAlchemy database connection string |
 | `MAX_PLAYERS` | `12` | Maximum players per game |
 | `CONFIRM_TIMEOUT_SECONDS` | `300` | Confirmation window in seconds (5 minutes) |
+| `OPERATOR_SECRET` | `change-me-in-production` | Secret key for operator-only endpoints |
+| `ALLOWED_ORIGINS` | `http://localhost:5173,...` | Comma-separated CORS allowed origins |
 | `STUB_SMS` | `true` | If true, log SMS messages instead of sending via Twilio |
 | `STUB_PUSH` | `true` | If true, log push notifications instead of sending via Expo |
+| `STUB_EMAIL` | `true` | If true, skip email sending (auto-verify makes this safe) |
 | `TWILIO_ACCOUNT_SID` | *(empty)* | Twilio account SID (required when `STUB_SMS=false`) |
 | `TWILIO_AUTH_TOKEN` | *(empty)* | Twilio auth token |
 | `TWILIO_FROM_NUMBER` | *(empty)* | Twilio sender phone number (E.164 format) |
+| `RESEND_API_KEY` | *(empty)* | Resend API key (required when `STUB_EMAIL=false`) |
+| `EMAIL_FROM` | *(empty)* | Sender email address for Resend |
 | `BASE_URL` | `http://localhost:8000` | Public-facing URL embedded in SMS messages |
+
+**Web frontend (`.env` / Vercel env vars):**
+
+| Variable | Default | Description |
+|---|---|---|
+| `VITE_API_URL` | *(empty — same origin)* | Backend base URL (set to PythonAnywhere URL in production) |
+| `VITE_OPERATOR_SECRET` | `change-me-in-production` | Operator secret for the web operator controls |
 
 **Mobile frontend:**
 
@@ -683,7 +768,7 @@ All configuration is read from environment variables (or a `.env` file) via Pyda
 
 ### 11.1 Test Scope
 
-The test suite (`backend/tests/test_scenarios.py`) contains **64 unit tests** that cover every rule in the specification. Tests run against an in-memory SQLite database, with no network calls (notification services are stubbed), and no asyncio event loop (timeouts are triggered manually).
+The test suite (`backend/tests/test_scenarios.py`) contains **78 unit tests** that cover every rule in the specification plus new features (leave game, reset, deregister). Tests run against an in-memory SQLite database with no network calls (notification services are stubbed) and timeouts triggered manually.
 
 ### 11.2 Test Structure
 
@@ -703,8 +788,11 @@ Each test class maps to one specification rule:
 | `TestScenario10_ConfirmNo` | R10 — no → end of queue | 4 |
 | `TestScenario11_ConfirmDefer` | R11 — defer → front of queue | 4 |
 | `TestScenario12_ValidResponses` | R12 — case-insensitive responses | 11 |
-| `TestScenario13_DisplayNames` | R13 — display name format | 5 |
+| `TestScenario13_DisplayNames` | R13 — display name format (`FirstName L`, brackets) | 5 |
 | `TestScenario14_SignupNumbersVisible` | R14 — signup numbers shown | 3 |
+| `TestScenario15_LeaveGameMidPlay` | R7a — leave active game mid-play | 5 |
+| `TestScenario16_ResetAll` | R7b — Start Over / reset | 5 |
+| `TestScenario17_Deregister` | Registration spec — deregister rules | 4 |
 | `TestEdgeCases` | Edge cases | 5 |
 
 ### 11.3 Running Tests
@@ -719,7 +807,7 @@ pytest tests/test_scenarios.py -v
 
 **In-memory database per test.** Each test receives a fresh SQLite in-memory database via the `db` fixture. This gives perfect isolation without file I/O overhead.
 
-**Manual timeout triggering.** Since tests have no asyncio event loop, `_main_loop` is set to `None`, which disables automatic timeout scheduling. Tests that verify timeout behaviour call `scheduler.handle_timeout()` directly.
+**Manual timeout triggering.** Since tests should not fire real `threading.Timer` callbacks, the `db` fixture calls `scheduler._timeout_tasks.clear()` before each test. Tests that verify timeout behaviour call `scheduler.handle_timeout()` directly, bypassing the timer entirely.
 
 **Chain-of-declines edge case.** When all backup players decline, the game starts with only the confirmed players. The test verifies this by triggering a third decline when only one backup player exists, causing the queue to be exhausted and the game to start with one confirmed player.
 
@@ -727,27 +815,60 @@ pytest tests/test_scenarios.py -v
 
 ## 12. Deployment
 
-### 12.1 Backend
+### 12.1 Backend (PythonAnywhere)
 
-```bash
-cd backend
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env          # edit as needed
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+The production backend runs on **PythonAnywhere free tier** (WSGI only, no long-running async).
+
+Key files:
+- `backend/wsgi.py` — PythonAnywhere WSGI entry. Uses a lazy singleton pattern to initialise `a2wsgi.ASGIMiddleware` inside the first request, after uWSGI has forked worker processes. This avoids the background-thread-doesn't-survive-fork hang.
+- `backend/app/main.py` — Calls `init_db()` at module import time (not in an asyncio lifespan hook).
+
+```python
+# wsgi.py — lazy init pattern
+from app.main import app
+_asgi = None
+
+def application(environ, start_response):
+    global _asgi
+    if _asgi is None:
+        from a2wsgi import ASGIMiddleware
+        _asgi = ASGIMiddleware(app)
+    return _asgi(environ, start_response)
 ```
 
-For production, add a process manager (e.g., `systemd`, `supervisord`) and reverse proxy (e.g., nginx). The single SQLite file (`volleyball.db`) is created automatically on first run.
+**PythonAnywhere Web tab settings:**
+- Source code: `/home/<user>/volleyball_scheduler/backend`
+- Virtualenv: `/home/<user>/venv`
+- WSGI file: points to `wsgi.py`
 
-### 12.2 Web App
+After code changes: `git pull` in the backend directory, then reload the web app via the PythonAnywhere Web tab.
 
+**Local development:**
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+### 12.2 Web App (Vercel)
+
+The production frontend is deployed to **Vercel**:
+
+- Root directory: `web/`
+- Build command: `npm run build`
+- Output directory: `dist/`
+- `vercel.json` contains SPA rewrite rules
+
+**Required Vercel environment variables:**
+- `VITE_API_URL` — PythonAnywhere backend URL (e.g. `https://allisonzai.pythonanywhere.com`)
+- `VITE_OPERATOR_SECRET` — operator secret (must match backend `OPERATOR_SECRET`)
+
+**Local development:**
 ```bash
 cd web
 npm install
-npm run build                 # outputs to dist/
+npm run dev   # Vite dev server on :5173
 ```
-
-Serve the `dist/` directory with any static file server (nginx, Caddy, etc.), or deploy to Netlify/Vercel. Set the API proxy origin to match the backend hostname.
 
 ### 12.3 Mobile App
 

@@ -18,6 +18,10 @@
 6. If the number of the players is less than or equal to 12, we don't need to
    schedule the game because everyone can play.
 7. Any player is allowed to leave while they are in the waiting list.
+7a. A confirmed player may leave an active game at any time. They are moved to
+    the end of the waiting list and the next queued player is notified.
+7b. The operator may use "Start Over" to cancel the current game and clear the
+    waiting list at any time. Player accounts are preserved.
 8. A player currently playing (pending confirmation or confirmed in an active
    game) is not allowed to join the waiting list.
 9. The player scheduled for a game will be notified and wait for up to
@@ -44,12 +48,12 @@ blocked while the player is in an active game.
 
 ### Account Verification
 
-After registering, the player must verify their account before joining the
-waiting list. The system sends a 6-digit code that expires in 15 minutes.
-The player chooses the delivery channel:
+Players are automatically verified upon registration — no email code or SMS
+code is required. A player may join the waiting list immediately after signing
+up.
 
-- **Email** — sent from the configured Gmail address (allisonazhang@gmail.com)
-- **SMS** — sent from the configured SMS number (8588480458)
+> Note: Email infrastructure (Resend) is in place and can be used for
+> verification flows or other notifications in the future.
 
 ### Sign In
 
@@ -67,7 +71,7 @@ A returning player signs in with their phone number and password.
 
 - Format: `FirstName L` (first name + last-name initial)
 - If two players share the same display name, disambiguate by appending the
-  last four digits of their phone number — e.g. `Alice J - 4242`
+  last four digits of their phone number — e.g. `Alice J [4242]`
 
 ## Notifications
 
@@ -75,6 +79,20 @@ A player can be notified via:
 
 - SMS to their phone number (via Twilio)
 - Push notification to their phone app (via Expo)
+
+## Operator Controls
+
+Operators authenticate using the `X-Operator-Secret` header. The following
+actions are available:
+
+- **Start New Game**: creates a new game and populates it with up to 12 players
+  from the front of the waiting list. Each selected player is notified and
+  enters the confirmation flow.
+- **End Game**: marks the current game as finished. Players who were confirmed
+  in the game are appended to the end of the waiting list, and the next game is
+  automatically populated from the queue.
+- **Start Over**: cancels the active game and clears the entire waiting list.
+  Player accounts are preserved; no players are deleted.
 
 ## User Interface
 
