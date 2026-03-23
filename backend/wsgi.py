@@ -1,15 +1,13 @@
 import sys
 import os
-import asyncio
 
-sys.path.insert(0, os.path.dirname(__file__))
+# Must set working directory BEFORE importing the app
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-# PythonAnywhere needs an event loop present before the app loads
-try:
-    loop = asyncio.get_event_loop()
-except RuntimeError:
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+# Load .env explicitly before app config is read
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
 
 from a2wsgi import ASGIMiddleware
 from app.main import app
