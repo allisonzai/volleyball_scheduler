@@ -13,9 +13,9 @@ class Settings(BaseSettings):
     STUB_PUSH: bool = True
     STUB_EMAIL: bool = True
 
-    # Gmail — used to send verification emails
-    GMAIL_ADDRESS: str = "allisonazhang@gmail.com"
-    GMAIL_APP_PASSWORD: str = ""  # Generate at myaccount.google.com > Security > App Passwords
+    # SendGrid — used to send verification emails over HTTPS
+    SENDGRID_API_KEY: str = ""
+    EMAIL_FROM: str = "allisonazhang@gmail.com"
 
     # SMS — Twilio credentials + your Google Voice / Twilio FROM number
     TWILIO_ACCOUNT_SID: str = ""
