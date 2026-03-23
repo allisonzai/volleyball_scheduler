@@ -277,7 +277,8 @@ class TestScenario5_GameRotation:
 
     def test_next_game_uses_first_12_in_queue(self, db):
         """After a 12-player game ends with 15 total, the 3 waiters + 12 rotated
-        should form a new 14-player queue, and the next 12 get slotted."""
+        should form a 15-player queue. Manually starting the next game should
+        slot the first 12 (the 3 original waiters + 9 court players)."""
         players = [register_and_queue(db, i) for i in range(1, 16)]  # 15
         game = scheduler.assign_next_game(db)
         for slot in game.slots:
@@ -287,10 +288,11 @@ class TestScenario5_GameRotation:
         scheduler.end_game(game.id, db)
         db.commit()
 
-        next_game = db.query(Game).filter(
-            Game.status.in_([GameStatus.OPEN, GameStatus.IN_PROGRESS])
-        ).first()
-        assert next_game is not None, "Next game should be auto-created after end"
+        # Operator manually starts the next game
+        next_game = scheduler.assign_next_game(db)
+        db.commit()
+
+        assert next_game is not None, "Next game should be created on manual start"
         assert len(next_game.slots) == 12, (
             f"Next game should have 12 slots, got {len(next_game.slots)}"
         )
@@ -308,21 +310,15 @@ class TestScenario5_GameRotation:
         scheduler.end_game(game.id, db)
         db.commit()
 
-        # After end_game, assign_next_game runs and pulls 12 from queue.
-        # The queue after that should contain the remaining players.
+        # After end_game (no auto-start), all 15 are in the queue:
+        # 3 original waiters at the front, then 12 returning court players.
         queue = scheduler.get_queue(db)
-        next_game = db.query(Game).filter(
-            Game.status.in_([GameStatus.OPEN, GameStatus.IN_PROGRESS])
-        ).first()
-
-        if next_game:
-            # Next game slots should include the 3 waiters (they were at front)
-            next_slot_ids = {s.player_id for s in next_game.slots}
-            waiter_ids = {p.id for p in waiters}
-            # At least the 3 original waiters should be in the next game
-            assert waiter_ids.issubset(next_slot_ids), (
-                "Original waiters should be first into the next game"
-            )
+        assert len(queue) == 15, f"Expected 15 in queue, got {len(queue)}"
+        top_3_ids = {e.player_id for e in queue[:3]}
+        waiter_ids = {p.id for p in waiters}
+        assert waiter_ids == top_3_ids, (
+            "Original waiters should be at the front of the queue after rotation"
+        )
 
 
 # ── SCENARIO 6 ───────────────────────────────────────────────────────────────
@@ -1024,7 +1020,7 @@ class TestScenario16_ResetAll:
 
         assert len(scheduler.get_queue(db)) == 0, "Queue must be empty after reset"
 
-    def test_reset_marks_active_game_finished(self, db):
+    def test_reset_deletes_active_game(self, db):
         for i in range(1, 13):
             register_and_queue(db, i)
         game = scheduler.assign_next_game(db)
@@ -1033,12 +1029,13 @@ class TestScenario16_ResetAll:
         db.commit()
 
         assert game.status == GameStatus.IN_PROGRESS
+        game_id = game.id
 
         scheduler.reset_all(db)
         db.commit()
 
-        db.refresh(game)
-        assert game.status == GameStatus.FINISHED, "Active game should be FINISHED after reset"
+        remaining = db.query(Game).filter(Game.id == game_id).first()
+        assert remaining is None, "Active game should be deleted after reset"
 
     def test_reset_preserves_player_accounts(self, db):
         players = [register_and_queue(db, i) for i in range(1, 6)]
@@ -1071,13 +1068,34 @@ class TestScenario16_ResetAll:
         db.commit()
 
         assert game.status == GameStatus.OPEN
+        game_id = game.id
 
         scheduler.reset_all(db)
         db.commit()
 
-        db.refresh(game)
-        assert game.status == GameStatus.FINISHED
+        remaining = db.query(Game).filter(Game.id == game_id).first()
+        assert remaining is None, "Open game should be deleted after reset"
         assert len(scheduler.get_queue(db)) == 0
+
+    def test_reset_resets_game_id_sequence(self, db):
+        """After Start Over, the next game should start at ID 1 again."""
+        players = [register_and_queue(db, i) for i in range(1, 6)]
+        game1 = scheduler.assign_next_game(db)
+        db.commit()
+        first_id = game1.id
+
+        scheduler.reset_all(db)
+        db.commit()
+
+        # Re-queue existing players (player accounts were preserved)
+        for p in players:
+            add_to_queue(db, p)
+        game2 = scheduler.assign_next_game(db)
+        db.commit()
+
+        assert game2.id == first_id, (
+            f"After Start Over, game ID should reset to {first_id}, got {game2.id}"
+        )
 
 
 # ── SCENARIO 17 ──────────────────────────────────────────────────────────────
@@ -1158,27 +1176,16 @@ class TestScenario17_Deregister:
         assert remaining is None, "Player record should be gone after deregister"
 
     def test_deregister_after_game_ends_is_allowed(self, db):
-        """Once a game is finished and the player is not slotted into the next game,
-        deregistration should be permitted.
-
-        Setup: 15 players. 12 play, 3 wait. After the game ends the 3 original
-        waiters are at the front of the queue and form the core of the next game,
-        so the last court player rotated back (seat 12) is NOT immediately
-        slotted in the new game — they sit in the queue with no active slot.
-        """
-        players = [register_and_queue(db, i) for i in range(1, 16)]  # 15 total
+        """Once a game is finished (and no new game auto-starts), every returning
+        court player is in the queue with no active slot — deregister is allowed."""
+        for i in range(1, 13):
+            register_and_queue(db, i)
         game = scheduler.assign_next_game(db)
         for slot in game.slots:
             scheduler.handle_confirmation(slot.player_id, game.id, "yes", db)
         db.commit()
 
-        # The player in seat 12 (last rotation position) will be the 12th person
-        # appended back to the queue after end_game. With 3 waiters already ahead,
-        # the next auto-game takes slots 1-12 of the merged queue, leaving position
-        # 15 (seat-12 player) in the queue with no active slot.
-        sorted_slots = sorted(game.slots, key=lambda s: s.position)
-        last_court_player_id = sorted_slots[-1].player_id
-
+        target_id = game.slots[0].player_id
         scheduler.end_game(game.id, db)
         db.commit()
 
@@ -1192,12 +1199,12 @@ class TestScenario17_Deregister:
             db.query(GameSlotModel)
             .join(GameModel, GameSlotModel.game_id == GameModel.id)
             .filter(
-                GameSlotModel.player_id == last_court_player_id,
+                GameSlotModel.player_id == target_id,
                 GameSlotModel.status.in_([SS.PENDING_CONFIRMATION, SS.CONFIRMED]),
                 GameModel.status.in_(["open", "in_progress"]),
             )
             .first()
         )
         assert active_slot is None, (
-            "Player who was not slotted in the new game should have no active slot — deregister allowed"
+            "After game ends (no auto-start), player is in queue — deregister should be allowed"
         )

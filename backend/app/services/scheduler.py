@@ -384,28 +384,20 @@ def end_game(game_id: int, db: Session) -> Game:
         _append_to_queue(db, slot.player_id)
 
     db.flush()
-    assign_next_game(db)
     return game
 
 
 def reset_all(db: Session) -> None:
-    """Cancel active games and clear the waiting list. Player accounts are kept."""
+    """Delete all games, slots, and queue. Player accounts are kept.
+    Deleting game records resets the SQLite ID sequence back to 1."""
     # Cancel all pending timeout timers
     for timer in list(_timeout_tasks.values()):
         timer.cancel()
     _timeout_tasks.clear()
 
-    # Mark any open/in-progress games as finished
-    active_games = (
-        db.query(Game)
-        .filter(Game.status.in_([GameStatus.OPEN, GameStatus.IN_PROGRESS]))
-        .all()
-    )
-    for game in active_games:
-        game.status = GameStatus.FINISHED
-        game.ended_at = datetime.utcnow()
-
-    # Clear the entire waiting list
+    # Delete slots first (FK → Game), then games, then queue
+    db.query(GameSlot).delete()
+    db.query(Game).delete()
     db.query(WaitingList).delete()
     db.flush()
     broadcast_update("game_update")

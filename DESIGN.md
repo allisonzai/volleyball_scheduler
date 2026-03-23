@@ -394,7 +394,7 @@ confirmed_players = [s for s in game.slots if s.status == CONFIRMED]
 for each confirmed player (in seat order):
     append to END of queue         # R5
 
-assign_next_game(db)               # auto-start next game from updated queue
+# No auto-start — operator must press "Start New Game" manually
 ```
 
 ### 5.6 Player Leaves Mid-Game: `leave_game(player_id, game_id, db)`
@@ -418,17 +418,16 @@ fill_slot(db, game)                # notify next waiting player
 
 ### 5.7 Reset All: `reset_all(db)`
 
-Operator-triggered "Start Over" that wipes the active game and queue (R7b).
+Operator-triggered "Start Over" that wipes all game history and queue (R7b).
+Deleting game records resets the SQLite ID counter so the next game starts at #1.
 
 ```
 cancel all pending timeout timers
 _timeout_tasks.clear()
 
-for each game with status in (OPEN, IN_PROGRESS):
-    game.status = FINISHED
-    game.ended_at = now()
-
-delete all WaitingList rows
+DELETE all GameSlot rows      # FK order: slots before games
+DELETE all Game rows          # resets SQLite ID sequence to 1
+DELETE all WaitingList rows
 # Player accounts are NOT deleted
 ```
 
