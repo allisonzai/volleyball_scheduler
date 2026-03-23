@@ -18,8 +18,9 @@
 6. If the number of the players is less than or equal to 12, we don't need to
    schedule the game because everyone can play.
 7. Any player is allowed to leave while they are in the waiting list.
-7a. A confirmed player may leave an active game at any time. They are moved to
-    the end of the waiting list and the next queued player is notified.
+7a. A confirmed player may leave an active game at any time. They are removed
+    from both the game and the waiting list entirely. The next queued player is
+    notified to fill the vacated spot.
 7b. The operator may use "Start Over" to cancel the current game and clear the
     waiting list at any time. Player accounts are preserved.
 8. A player currently playing (pending confirmation or confirmed in an active
@@ -88,8 +89,8 @@ actions are available:
   from the front of the waiting list. Each selected player is notified and
   enters the confirmation flow.
 - **End Game**: marks the current game as finished. Players who were confirmed
-  in the game are appended to the end of the waiting list, and the next game is
-  automatically populated from the queue.
+  in the game are appended to the end of the waiting list. The operator must
+  press **Start New Game** to begin the next round.
 - **Start Over**: cancels the active game and clears the entire waiting list.
   Player accounts are preserved; no players are deleted.
 

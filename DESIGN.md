@@ -49,16 +49,16 @@ The following rules are taken directly from the specification.
 | R4 | Players who arrive while a game is ongoing join the waiting list. |
 | R5 | When a game ends, court players rotate to the end of the waiting list. The next 12 in line play the following game. |
 | R6 | If 12 or fewer players are present, no scheduling is needed — everyone plays immediately. |
-| R7 | Any player may leave the waiting list at any time. |
+| R7 | Any player may leave the waiting list at any time. A player in the waiting list may also defer to swap positions with the next person behind them. |
+| R7a | A confirmed player may leave an active game at any time. They are removed from both the game and the waiting list entirely. The next queued player is notified. |
+| R7b | The operator may "Start Over" to cancel the active game and clear the waiting list. Player accounts are preserved. |
 | R8 | When a player is scheduled, they are notified and have up to 5 minutes (configurable) to respond. |
 | R9 | Responding **yes** marks the player as playing. |
-| R10 | Responding **no** removes the player from the current game and places them at the end of the waiting list. The next person is notified. |
-| R11 | Responding **defer** places the player at the front of the waiting list. The next person is notified. |
-| R12 | Confirmation can be sent by typing or clicking **yes**, **no**, or **defer**. |
+| R10 | Responding **no** removes the player from the current game and places them at the end of the waiting list. The next eligible player (no prior slot in this game) is notified. |
+| R11 | Responding **defer** swaps the player with the next eligible person in the queue. That person fills the vacated slot; the deferred player is placed at position 2. |
+| R12 | Confirmation is done by clicking **yes**, **no**, or **defer** in the app. |
 | R13 | Players are displayed as "FirstName L" — duplicates are disambiguated by appending the last 4 digits of their phone number in brackets, e.g. `Alice J [4242]`. |
 | R14 | Every player on the court and waiting list is shown alongside their signup number. |
-| R7a | A confirmed player may leave an active game at any time. They are moved to the end of the waiting list and the next queued player is notified. |
-| R7b | The operator may "Start Over" to cancel the active game and clear the waiting list. Player accounts are preserved. |
 
 ---
 
@@ -286,7 +286,7 @@ All scheduling logic is in `backend/app/services/scheduler.py`.
 
 ### 5.1 Starting a Game: `assign_next_game(db)`
 
-Called by the operator via `POST /api/games/start`, and automatically after each game ends.
+Called by the operator via `POST /api/games/start`. The operator must manually trigger this after each game ends.
 
 ```
 queue = get_queue(db)                          # ordered by position ASC
@@ -364,10 +364,10 @@ if response == "no":
 if response == "defer":
     slot.status = DECLINED
     fill_slot(game)                       # notify next person FIRST  ← key ordering
-    prepend player to FRONT of queue      # R11 — holds position for next available slot
+    insert player at position 2 in queue  # R11 — behind the new front, ahead of everyone else
 ```
 
-**Why `fill_slot` before `prepend` for defer:** If we prepended first, `fill_slot` would immediately re-draw the deferred player (they'd be at position 1). Calling `fill_slot` first consumes the next person from the queue _before_ the deferred player is added, so they hold front position for the _next_ available opportunity without being immediately re-notified for the same game.
+**Why `fill_slot` before insert-at-2 for defer:** `fill_slot` removes the next eligible player from the queue (they fill the vacated slot). Only after that is the deferred player re-inserted at position 2 — directly behind whoever is now first. This prevents the deferred player from being immediately re-drawn for the same game (they have a DECLINED slot so `fill_slot` would skip them anyway, but doing it in this order keeps the queue state clean).
 
 ### 5.4 Handling a Timeout: `handle_timeout(player_id, game_id, db)`
 
@@ -412,26 +412,50 @@ load game; if game.status not in (OPEN, IN_PROGRESS):
 slot.status = WITHDRAWN
 slot.responded_at = now()
 
-append player to END of queue
+remove player from queue entirely  # R7a: they leave both game and waiting list
 fill_slot(db, game)                # notify next waiting player
 ```
 
 ### 5.7 Reset All: `reset_all(db)`
 
-Operator-triggered "Start Over" that wipes all game history and queue (R7b).
-Deleting game records resets the SQLite ID counter so the next game starts at #1.
+Operator-triggered "Start Over" (R7b). Cancels the active game and clears the waiting list. Game **history is preserved** (finished games remain in Past Games). Player accounts are not deleted.
 
 ```
 cancel all pending timeout timers
 _timeout_tasks.clear()
 
-DELETE all GameSlot rows      # FK order: slots before games
-DELETE all Game rows          # resets SQLite ID sequence to 1
+mark active game(s) as FINISHED
 DELETE all WaitingList rows
-# Player accounts are NOT deleted
+# Game records and Player accounts are NOT deleted
 ```
 
-### 5.8 Queue Position Management
+### 5.8a Clear History: `clear_history(db)`
+
+Deletes all FINISHED game records and their slots. Because SQLAlchemy does not use `AUTOINCREMENT`, deleting all games resets the SQLite ID counter so the next game starts at #1.
+
+```
+finished_ids = [g.id for g in FINISHED games]
+DELETE GameSlot rows where game_id IN finished_ids   # FK order
+DELETE Game rows where id IN finished_ids
+# Active game, queue, and player accounts are NOT touched
+```
+
+### 5.9 Queue Defer: `defer_in_queue(player_id, db)`
+
+Waiting-list players can swap positions with the person immediately behind them (R7).
+
+```
+entry = get WaitingList entry for player_id
+next_entry = first entry WHERE position > entry.position ORDER BY position
+
+if next_entry is None:
+    raise ValueError("Already last in queue")
+
+swap entry.position ↔ next_entry.position
+resequence (compact positions to 1..N)
+```
+
+### 5.10 Queue Position Management
 
 The `WaitingList` table uses two independent numbers per entry:
 
@@ -482,6 +506,7 @@ After every structural change (add, remove, prepend), `_resequence()` renumbers 
 | `GET` | `/api/queue` | None | Return the waiting list ordered by position. |
 | `POST` | `/api/queue/join` | `X-Player-Token` | Add a player to the end of the queue. Body: `{"player_id": 1}`. |
 | `DELETE` | `/api/queue/{player_id}` | `X-Player-Token` | Remove a player from the queue. |
+| `POST` | `/api/queue/{player_id}/defer` | `X-Player-Token` | Swap the player with the next person behind them in the queue. Returns 400 if already last. |
 
 **Queue entry response:**
 ```json
@@ -503,8 +528,9 @@ After every structural change (add, remove, prepend), `_resequence()` renumbers 
 | `GET` | `/api/games/{id}` | None | Get a specific game with all its slots. |
 | `POST` | `/api/games/start` | `X-Operator-Secret` | Create and populate the next game from the queue. |
 | `POST` | `/api/games/{id}/end` | `X-Operator-Secret` | Mark a game finished and trigger rotation. |
-| `POST` | `/api/games/reset` | `X-Operator-Secret` | Cancel active game and clear waiting list (Start Over). |
-| `POST` | `/api/games/{id}/leave` | `X-Player-Token` | Confirmed player leaves an active game mid-play. |
+| `POST` | `/api/games/reset` | `X-Operator-Secret` | Cancel active game and clear waiting list (Start Over). History preserved. |
+| `DELETE` | `/api/games/history` | `X-Operator-Secret` | Delete all finished game records and reset game ID sequence. |
+| `POST` | `/api/games/{id}/leave` | `X-Player-Token` | Confirmed player leaves an active game mid-play (removed from queue entirely). |
 
 **Game response:**
 ```json
@@ -634,7 +660,7 @@ Built with React 18, Vite, and Tailwind CSS. Single-page application served on p
 │                                    │
 │  ┌─────────────────────────────┐   │
 │  │  Waiting List (4)           │   │
-│  │  1. Carol D.  [Leave]       │   │  ← WaitingListView
+│  │  1. Carol D.  [Defer][Leave] │   │  ← WaitingListView
 │  │  2. Dave M.                 │   │
 │  └─────────────────────────────┘   │
 │                                    │
@@ -682,7 +708,7 @@ Built with React Native and Expo, using Expo Router for file-based navigation. S
 | Concern | Web | Mobile |
 |---|---|---|
 | Player persistence | `localStorage` | `AsyncStorage` |
-| Live updates | SSE + 5s polling | 5s polling (SSE not used) |
+| Live updates | 5s polling | 5s polling |
 | Confirmation | Banner in page | Bottom-sheet modal |
 | Leave queue | Inline "Leave" button | Destructive alert dialog |
 
@@ -767,7 +793,7 @@ All configuration is read from environment variables (or a `.env` file) via Pyda
 
 ### 11.1 Test Scope
 
-The test suite (`backend/tests/test_scenarios.py`) contains **78 unit tests** that cover every rule in the specification plus new features (leave game, reset, deregister). Tests run against an in-memory SQLite database with no network calls (notification services are stubbed) and timeouts triggered manually.
+The test suite (`backend/tests/test_scenarios.py`) contains **87 unit tests** that cover every rule in the specification. Tests run against an in-memory SQLite database with no network calls (notification services are stubbed) and timeouts triggered manually.
 
 ### 11.2 Test Structure
 
@@ -785,13 +811,15 @@ Each test class maps to one specification rule:
 | `TestScenario8_ConfigurableTimeout` | R8 — 5-min configurable timeout | 5 |
 | `TestScenario9_ConfirmYes` | R9 — yes marks as playing | 3 |
 | `TestScenario10_ConfirmNo` | R10 — no → end of queue | 4 |
-| `TestScenario11_ConfirmDefer` | R11 — defer → front of queue | 4 |
+| `TestScenario11_ConfirmDefer` | R11 — defer swaps player to position 2 | 4 |
 | `TestScenario12_ValidResponses` | R12 — case-insensitive responses | 11 |
 | `TestScenario13_DisplayNames` | R13 — display name format (`FirstName L`, brackets) | 5 |
 | `TestScenario14_SignupNumbersVisible` | R14 — signup numbers shown | 3 |
-| `TestScenario15_LeaveGameMidPlay` | R7a — leave active game mid-play | 5 |
-| `TestScenario16_ResetAll` | R7b — Start Over / reset | 5 |
+| `TestScenario15_LeaveGameMidPlay` | R7a — leave active game, removed from queue | 5 |
+| `TestScenario16_ResetAll` | R7b — Start Over preserves history | 5 |
 | `TestScenario17_Deregister` | Registration spec — deregister rules | 4 |
+| `TestScenario18_ClearHistory` | Clear History resets game ID sequence | 4 |
+| `TestScenario19_QueueDefer` | R7 — waiting list defer (swap with next) | 4 |
 | `TestEdgeCases` | Edge cases | 5 |
 
 ### 11.3 Running Tests

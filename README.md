@@ -8,11 +8,11 @@ A full-stack volleyball game scheduling system with a Python/FastAPI backend, Re
 - First-come-first-served signup queue with permanent signup numbers
 - Auto-scheduling: first 12 players are notified; game starts on confirmation
 - **yes** — player confirmed, takes their spot
-- **no** — player removed from game, moved to end of queue
-- **defer** — player moved to front of queue, next person notified
+- **no** — player removed from game, moved to end of queue; next eligible player notified
+- **defer** — player swaps with the next person in the queue (goes to position 2)
 - Configurable 5-minute confirmation timeout (no response → end of queue)
-- Players can leave the waiting list at any time
-- Confirmed players can leave an active game (moved to end of queue)
+- Players can leave the waiting list, or defer to swap with the next person behind them
+- Confirmed players can leave an active game (removed from queue entirely)
 - Display names: `FirstName L` — disambiguated with last 4 phone digits in brackets if duplicate (e.g. `Alice J [4242]`)
 - SMS notifications via Twilio (stub mode by default)
 - Push notifications via Expo (stub mode by default)
@@ -123,6 +123,7 @@ EXPO_PUBLIC_API_URL=http://192.168.1.100:8000 npx expo start
 | GET | `/api/queue` | — | Get waiting list (ordered) |
 | POST | `/api/queue/join` | Player token | Join the waiting list |
 | DELETE | `/api/queue/{player_id}` | Player token | Leave the waiting list |
+| POST | `/api/queue/{player_id}/defer` | Player token | Swap with the next person in the waiting list |
 | GET | `/api/games/current` | — | Current active game |
 | GET | `/api/games` | — | List all games |
 | POST | `/api/games/start` | Operator secret | Start a new game |
@@ -143,8 +144,8 @@ EXPO_PUBLIC_API_URL=http://192.168.1.100:8000 npx expo start
 4. If > 12 players: first 12 are notified via SMS + push.
 5. Each player has 5 minutes to respond:
    - **yes** → confirmed
-   - **no** → moved to end of queue, next player notified
-   - **defer** → moved to front of queue, next player notified
+   - **no** → moved to end of queue; next eligible player notified
+   - **defer** → swaps to position 2 in queue; next eligible player notified
    - *(no response)* → timeout, moved to end of queue
 6. Game starts when all pending slots are resolved.
 7. When the game ends, confirmed court players rotate to the end of the queue.
@@ -168,4 +169,4 @@ cd backend
 PYTHONPATH=. pytest tests/test_scenarios.py -v
 ```
 
-83 scenario-driven tests covering all spec requirements.
+87 scenario-driven tests covering all spec requirements.
