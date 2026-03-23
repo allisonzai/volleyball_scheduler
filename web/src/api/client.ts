@@ -61,6 +61,12 @@ export const endGame = (id: number, operatorSecret: string) =>
 export const leaveGame = (gameId: number, secretToken: string) =>
   api.post(`/games/${gameId}/leave`, null, { headers: { "X-Player-Token": secretToken } });
 
+// Settings
+export const getSettings = () =>
+  api.get("/settings").then((r) => r.data);
+export const updateSettings = (confirm_timeout_seconds: number, operatorSecret: string) =>
+  api.patch("/settings", { confirm_timeout_seconds }, { headers: { "X-Operator-Secret": operatorSecret } }).then((r) => r.data);
+
 // Confirmation
 export const confirm = (player_id: number, game_id: number, response: string, secret_token: string) =>
   api.post("/confirm", { player_id, game_id, response }, { headers: { "X-Player-Token": secret_token } }).then((r) => r.data);

@@ -2,22 +2,24 @@ import { useState, useEffect } from "react";
 import { confirm } from "../api/client";
 import type { Game, Slot } from "../types";
 
-const TIMEOUT_SECONDS = 300; // must match backend CONFIRM_TIMEOUT_SECONDS
-
-function useCountdown(notifiedAt: string | null): number {
+function useCountdown(notifiedAt: string | null, timeoutSeconds: number): number {
   const getSecondsLeft = () => {
-    if (!notifiedAt) return TIMEOUT_SECONDS;
+    if (!notifiedAt) return timeoutSeconds;
     const elapsed = Math.floor((Date.now() - new Date(notifiedAt + "Z").getTime()) / 1000);
-    return Math.max(0, TIMEOUT_SECONDS - elapsed);
+    return Math.max(0, timeoutSeconds - elapsed);
   };
 
   const [secondsLeft, setSecondsLeft] = useState(getSecondsLeft);
 
   useEffect(() => {
+    setSecondsLeft(getSecondsLeft());
+  }, [notifiedAt, timeoutSeconds]);
+
+  useEffect(() => {
     if (secondsLeft <= 0) return;
     const id = setInterval(() => setSecondsLeft(getSecondsLeft()), 1000);
     return () => clearInterval(id);
-  }, [notifiedAt]);
+  }, [notifiedAt, timeoutSeconds]);
 
   return secondsLeft;
 }
@@ -33,12 +35,13 @@ interface Props {
   slot: Slot;
   playerId: number;
   playerToken: string;
+  timeoutSeconds: number;
   onDone: () => void;
 }
 
-export default function ConfirmationBanner({ game, slot, playerId, playerToken, onDone }: Props) {
+export default function ConfirmationBanner({ game, slot, playerId, playerToken, timeoutSeconds, onDone }: Props) {
   const [loading, setLoading] = useState(false);
-  const secondsLeft = useCountdown(slot.notified_at);
+  const secondsLeft = useCountdown(slot.notified_at, timeoutSeconds);
 
   const urgent = secondsLeft <= 60;
 
