@@ -48,7 +48,7 @@ After registering, the player must verify their account before joining the
 waiting list. The system sends a 6-digit code that expires in 15 minutes.
 The player chooses the delivery channel:
 
-- **Email** — sent from the configured Gmail address (bakerbzhang@gmail.com)
+- **Email** — sent from the configured Gmail address (allisonazhang@gmail.com)
 - **SMS** — sent from the configured SMS number (8588480458)
 
 ### Sign In
@@ -65,9 +65,9 @@ A returning player signs in with their phone number and password.
 
 ## Display Names
 
-- Format: `FirstName L.` (first name + last-name initial + period)
+- Format: `FirstName L` (first name + last-name initial)
 - If two players share the same display name, disambiguate by appending the
-  last two digits of their phone number — e.g. `Alice J 42.`
+  last four digits of their phone number — e.g. `Alice J - 4242`
 
 ## Notifications
 
