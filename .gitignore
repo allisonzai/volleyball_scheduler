@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Database
+*.db
+
+# Secrets — never commit these
+backend/.env
+web/.env.local
+
+# Frontend build
+web/dist/
+web/node_modules/
+mobile/node_modules/
+
+# macOS
+.DS_Store
