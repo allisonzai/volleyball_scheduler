@@ -58,13 +58,19 @@ export default function PastGamesView() {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {game.slots
-                  .filter((s) => s.status === "confirmed")
+                  .filter((s) => s.status === "confirmed" || s.status === "withdrawn")
                   .map((slot) => (
-                    <PlayerBadge
-                      key={slot.id}
-                      displayName={slot.display_name}
-                      signupNumber={slot.signup_number}
-                    />
+                    <div key={slot.id} className="relative">
+                      <PlayerBadge
+                        displayName={slot.display_name}
+                        signupNumber={slot.signup_number}
+                      />
+                      {slot.status === "withdrawn" && (
+                        <span className="absolute top-1 right-1 text-[10px] text-red-400 font-medium">
+                          left
+                        </span>
+                      )}
+                    </div>
                   ))}
               </div>
             </div>
