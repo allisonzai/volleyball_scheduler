@@ -15,6 +15,7 @@ export const registerPlayer = (data: {
   last_name: string;
   phone: string;
   email: string;
+  password: string;
 }) => api.post("/players", data).then((r) => r.data);
 
 export const getPlayer = (id: number) =>

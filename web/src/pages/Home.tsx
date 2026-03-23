@@ -160,6 +160,7 @@ export default function Home() {
                 <WaitingListView
                   queue={queue}
                   currentPlayerId={player?.id}
+                  currentPlayer={player}
                   onRefresh={refresh}
                 />
               </>

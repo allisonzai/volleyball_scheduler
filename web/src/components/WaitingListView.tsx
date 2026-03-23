@@ -1,18 +1,20 @@
-import type { QueueEntry } from "../types";
+import type { QueueEntry, Player } from "../types";
 import PlayerBadge from "./PlayerBadge";
 import { leaveQueue } from "../api/client";
 
 interface Props {
   queue: QueueEntry[];
   currentPlayerId?: number | null;
+  currentPlayer?: Player | null;
   onRefresh: () => void;
 }
 
-export default function WaitingListView({ queue, currentPlayerId, onRefresh }: Props) {
+export default function WaitingListView({ queue, currentPlayerId, currentPlayer, onRefresh }: Props) {
   const handleLeave = async (playerId: number) => {
+    if (!currentPlayer) return;
     if (!confirm("Leave the waiting list?")) return;
     try {
-      await leaveQueue(playerId);
+      await leaveQueue(playerId, currentPlayer.secret_token);
       onRefresh();
     } catch {
       alert("Failed to leave queue.");
