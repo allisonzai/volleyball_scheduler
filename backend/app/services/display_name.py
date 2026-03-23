@@ -22,12 +22,12 @@ def resolve_display_name(first_name: str, last_name: str, phone: str, db: Sessio
 
     # Use last 4 digits of phone for disambiguation
     suffix = phone[-4:]
-    candidate = f"{prefix} - {suffix}"
+    candidate = f"{prefix} [{suffix}]"
 
     # Update any existing player that still has the bare name
     for conflict in conflicts:
         if conflict.display_name == base:
-            conflict.display_name = f"{prefix} - {conflict.phone[-4:]}"
+            conflict.display_name = f"{prefix} [{conflict.phone[-4:]}]"
             db.flush()
 
     return candidate

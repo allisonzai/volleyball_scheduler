@@ -765,6 +765,9 @@ class TestScenario13_DisplayNames:
         assert p1.display_name != "Alice S" or p2.display_name != "Alice S", (
             "At least one duplicate must be disambiguated"
         )
+        # Verify bracket format
+        if p2.display_name != "Alice S":
+            assert "[" in p2.display_name and "]" in p2.display_name
 
     def test_unique_names_no_suffix(self, db):
         p1 = make_player(db, 1, first="Alice", last="Smith")
@@ -779,9 +782,9 @@ class TestScenario13_DisplayNames:
         p2 = make_player(db, 89, first="Alice", last="Sutton")
         db.commit()
 
-        # p2's phone ends in '0089', should contain '0089'
-        assert "0089" in p2.display_name, (
-            f"Phone suffix '0089' should appear in display name, got '{p2.display_name}'"
+        # p2's phone ends in '0089', should be "Alice S [0089]"
+        assert "0089" in p2.display_name and "[" in p2.display_name, (
+            f"Expected bracket format with '0089', got '{p2.display_name}'"
         )
 
     def test_three_same_initials_all_unique(self, db):
