@@ -388,6 +388,29 @@ def end_game(game_id: int, db: Session) -> Game:
     return game
 
 
+def reset_all(db: Session) -> None:
+    """Cancel active games and clear the waiting list. Player accounts are kept."""
+    # Cancel all pending timeout timers
+    for timer in list(_timeout_tasks.values()):
+        timer.cancel()
+    _timeout_tasks.clear()
+
+    # Mark any open/in-progress games as finished
+    active_games = (
+        db.query(Game)
+        .filter(Game.status.in_([GameStatus.OPEN, GameStatus.IN_PROGRESS]))
+        .all()
+    )
+    for game in active_games:
+        game.status = GameStatus.FINISHED
+        game.ended_at = datetime.utcnow()
+
+    # Clear the entire waiting list
+    db.query(WaitingList).delete()
+    db.flush()
+    broadcast_update("game_update")
+
+
 def join_queue(player_id: int, db: Session) -> WaitingList:
     entry = _append_to_queue(db, player_id)
     broadcast_update("queue_update")

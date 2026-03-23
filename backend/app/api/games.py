@@ -85,6 +85,16 @@ def get_game(game_id: int, db: Session = Depends(get_db)):
     return _game_to_schema(game, db)
 
 
+@router.post("/reset", status_code=204)
+def reset_all(
+    x_operator_secret: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    _require_operator(x_operator_secret)
+    scheduler.reset_all(db)
+    db.commit()
+
+
 @router.post("/start", response_model=GameOut, status_code=201)
 def start_game(
     x_operator_secret: Optional[str] = Header(default=None),

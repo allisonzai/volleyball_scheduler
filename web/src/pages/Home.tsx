@@ -7,7 +7,7 @@ import WaitingListView from "../components/WaitingListView";
 import PlayerRegistration from "../components/PlayerRegistration";
 import ConfirmationBanner from "../components/ConfirmationBanner";
 import PastGamesView from "../components/PastGamesView";
-import { joinQueue, startGame, endGame, deregisterPlayer } from "../api/client";
+import { joinQueue, startGame, endGame, deregisterPlayer, resetAll } from "../api/client";
 import type { Player } from "../types";
 
 type Tab = "live" | "history";
@@ -48,6 +48,16 @@ export default function Home() {
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Could not start game.";
       alert(msg);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!confirm("Start Over? This will cancel the current game and clear the waiting list. Player accounts are kept.")) return;
+    try {
+      await resetAll(operatorSecret);
+      refresh();
+    } catch {
+      alert("Could not reset.");
     }
   };
 
@@ -204,7 +214,7 @@ export default function Home() {
             {/* Operator controls */}
             <div className="border-t border-dashed border-gray-200 pt-4">
               <p className="text-xs text-gray-400 mb-2 text-center">Operator Controls</p>
-              <div className="flex gap-3">
+              <div className="flex gap-3 flex-wrap">
                 {!isGameActive && (
                   <button
                     onClick={handleStart}
@@ -221,6 +231,12 @@ export default function Home() {
                     End Game #{game?.id}
                   </button>
                 )}
+                <button
+                  onClick={handleReset}
+                  className="flex-1 bg-red-500 hover:bg-red-600 text-white text-sm font-medium py-2 rounded-xl transition"
+                >
+                  Start Over
+                </button>
               </div>
             </div>
           </>
