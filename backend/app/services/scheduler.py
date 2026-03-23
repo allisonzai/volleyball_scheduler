@@ -246,23 +246,31 @@ def _try_fill_open_slots(db: Session, game: Game) -> None:
         return
 
     # Batch-fill: pull up to `needed` replacements from the queue at once.
-    # fill_slot handles the IN_PROGRESS transition when the queue runs dry
-    # (only if confirmed > 0 at that point).
+    # Use allow_requeue=True so deferred players who were re-inserted into the
+    # queue are eligible — their DECLINED slot no longer blocks them.
     for _ in range(needed):
-        if not fill_slot(db, game):
+        if not fill_slot(db, game, allow_requeue=True):
             break  # queue exhausted
         db.expire(game)
 
 
-def fill_slot(db: Session, game: Game) -> bool:
+def fill_slot(db: Session, game: Game, allow_requeue: bool = False) -> bool:
     """Pull the next eligible player from the queue and assign them to the game.
-    Skips players who already have an active slot in this game (e.g. deferred players
-    who were prepended to the front but shouldn't be re-drawn for the same game).
     Returns True if a player was found, False if no eligible player exists.
+
+    allow_requeue=False (default): excludes every player who has any slot in
+      this game regardless of status.  Used during the live confirmation phase
+      so a player who just deferred is not immediately re-drawn.
+    allow_requeue=True: excludes only players with an active slot
+      (PENDING_CONFIRMATION or CONFIRMED).  Used during batch-fill after all
+      pending slots have resolved, so deferred players re-inserted into the
+      queue are eligible to fill remaining spots.
     """
-    # A player who already has ANY slot in this game (regardless of status) should
-    # not be drawn again — prevents double-slotting after decline/defer/timeout.
-    already_slotted = {s.player_id for s in game.slots}
+    if allow_requeue:
+        active_statuses = {SlotStatus.PENDING_CONFIRMATION, SlotStatus.CONFIRMED}
+        already_slotted = {s.player_id for s in game.slots if s.status in active_statuses}
+    else:
+        already_slotted = {s.player_id for s in game.slots}
 
     queue = get_queue(db)
     next_entry = next(

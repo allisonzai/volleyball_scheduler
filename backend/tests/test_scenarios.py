@@ -669,8 +669,8 @@ class TestScenario10_ConfirmNo:
 
     def test_batch_fill_runs_even_when_no_one_confirmed(self, db):
         """If all 12 slots time out (confirmed=0) but the queue has players,
-        batch fill should still pull all eligible players — not skip because
-        confirmed==0."""
+        batch fill should pull all eligible players — including deferred players
+        re-inserted into the queue — not skip because confirmed==0."""
         # 17 players: 12 slotted (p1-p12), 5 in queue (p13-p17)
         for i in range(1, 18):
             register_and_queue(db, i)
@@ -690,15 +690,48 @@ class TestScenario10_ConfirmNo:
         db.commit()
 
         db.refresh(game)
-        # confirmed=0, but p14-p17 should have been batch-filled (p1 is in
-        # already_slotted so skipped; p14-p17 are the 4 eligible queue players)
+        # confirmed=0, queue has [p1, p14, p15, p16, p17].
+        # Batch fill should pull all 5 (p1 is now eligible because allow_requeue=True
+        # in _try_fill_open_slots skips only PENDING/CONFIRMED slots, not DECLINED).
         pending_ids = {s.player_id for s in game.slots if s.status == SlotStatus.PENDING_CONFIRMATION}
-        assert len(pending_ids) == 4, (
-            f"Expected 4 replacement players notified, got {len(pending_ids)}"
+        assert len(pending_ids) == 5, (
+            f"Expected 5 replacement players notified, got {len(pending_ids)}"
         )
-        # p1 should still be in queue (was skipped as already_slotted)
+        # p1 should now have a new pending slot (drawn from queue)
+        assert p1_id in pending_ids, "p1 (deferred, re-queued) should be batch-filled"
+        # p1 should no longer be in the waiting list
         queue_ids = {e.player_id for e in scheduler.get_queue(db)}
-        assert p1_id in queue_ids, "p1 (deferred) should remain in queue"
+        assert p1_id not in queue_ids, "p1 should have been pulled from queue into new slot"
+
+    def test_deferred_player_fills_slot_when_queue_too_small(self, db):
+        """If the queue (excluding deferred players) is too small to fill all
+        vacated slots, the deferred player must be included in the batch fill."""
+        settings.MAX_PLAYERS = 4
+        # 5 players: 4 slotted (p1-p4), 1 in queue (p5)
+        for i in range(1, 6):
+            register_and_queue(db, i)
+        game = scheduler.assign_next_game(db)
+        db.commit()
+
+        # p1 defers → p5 fills the slot; p1 re-inserted into queue
+        p1_id = game.slots[0].player_id
+        scheduler.handle_confirmation(p1_id, game.id, "defer", db)
+        db.commit()
+
+        # p2, p3, p4, p5 all time out — queue only has p1 (the deferred player)
+        db.refresh(game)
+        for slot in list(game.slots):
+            if slot.status == SlotStatus.PENDING_CONFIRMATION:
+                scheduler.handle_timeout(slot.player_id, game.id, db)
+        db.commit()
+
+        db.refresh(game)
+        # 4 slots are vacant; only p1 is in the queue.
+        # p1 should be batch-filled even though they have a DECLINED slot.
+        pending_ids = {s.player_id for s in game.slots if s.status == SlotStatus.PENDING_CONFIRMATION}
+        assert p1_id in pending_ids, "deferred player should be batch-filled when queue is too small"
+        queue_ids = {e.player_id for e in scheduler.get_queue(db)}
+        assert p1_id not in queue_ids, "deferred player should have been pulled from queue"
 
     def test_no_with_empty_queue_does_not_crash(self, db):
         """If queue is empty when someone says no, game starts with whoever confirmed."""
