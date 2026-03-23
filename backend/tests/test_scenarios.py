@@ -241,6 +241,44 @@ class TestScenario4_NewArrivalsJoinWaitingList:
             "Early waiter should be ahead of late arrival"
         )
 
+    def test_more_than_15_players_in_waiting_list(self, db):
+        """Game is running with 12 on court and 5 already waiting.
+        8 more players arrive during the game — total waiting list grows to 13.
+        All positions are compact and in arrival order."""
+        # 12 on court + 5 pre-existing waiters
+        for i in range(1, 13):
+            register_and_queue(db, i)
+        early_waiters = [register_and_queue(db, i) for i in range(13, 18)]  # 5 waiters
+        game = scheduler.assign_next_game(db)
+        for slot in game.slots:
+            scheduler.handle_confirmation(slot.player_id, game.id, "yes", db)
+        db.commit()
+
+        # 8 more players join while game is running — total queue: 5 + 8 = 13
+        late_arrivals = []
+        for i in range(18, 26):
+            p = make_player(db, i)
+            scheduler.join_queue(p.id, db)
+            late_arrivals.append(p)
+        db.commit()
+
+        queue = scheduler.get_queue(db)
+        assert len(queue) == 13, f"Expected 13 players in queue, got {len(queue)}"
+
+        positions = [e.position for e in queue]
+        assert positions == list(range(1, 14)), (
+            f"Queue positions should be compact 1..13, got {positions}"
+        )
+
+        # Early waiters must all precede any late arrival
+        early_ids = {p.id for p in early_waiters}
+        late_ids = {p.id for p in late_arrivals}
+        early_positions = [e.position for e in queue if e.player_id in early_ids]
+        late_positions  = [e.position for e in queue if e.player_id in late_ids]
+        assert max(early_positions) < min(late_positions), (
+            "All early waiters should be ahead of all late arrivals"
+        )
+
 
 # ── SCENARIO 5 ───────────────────────────────────────────────────────────────
 # "Once a game is completed the players on the court will be added to the
