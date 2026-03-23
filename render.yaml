@@ -2,7 +2,6 @@ databases:
   - name: volleyball-db
     databaseName: volleyball
     user: volleyball
-    plan: free
 
 services:
   # ── Backend ────────────────────────────────────────────────────────────────
@@ -12,7 +11,6 @@ services:
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
-    plan: free
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -50,7 +48,6 @@ services:
     rootDir: web
     buildCommand: npm install && npm run build
     staticPublishPath: dist
-    plan: free
     envVars:
       - key: VITE_API_URL
         sync: false        # set to your Render backend URL after deploying
