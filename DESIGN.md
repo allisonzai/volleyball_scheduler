@@ -54,7 +54,7 @@ The following rules are taken directly from the specification.
 | R7b | The operator may "Start Over" to cancel the active game and clear the waiting list. Player accounts are preserved. |
 | R8 | When a player is scheduled, they are notified and have up to 5 minutes (configurable) to respond. |
 | R9 | Responding **yes** marks the player as playing. |
-| R10 | Responding **no** removes the player from the current game and places them at the end of the waiting list. The next eligible player (no prior slot in this game) is notified. |
+| R10 | Responding **no** (or not responding within the timeout) removes the player from the current game and from the waiting list entirely. The next eligible player (no prior slot in this game) is notified. |
 | R11 | Responding **defer** swaps the player with the next eligible person in the queue. That person fills the vacated slot; the deferred player is placed at position 2. |
 | R12 | Confirmation is done by clicking **yes**, **no**, or **defer** in the app. |
 | R13 | Players are displayed as "FirstName L" — duplicates are disambiguated by appending the last 4 digits of their phone number in brackets, e.g. `Alice J [4242]`. |
@@ -358,7 +358,7 @@ if response == "yes":
 
 if response == "no":
     slot.status = DECLINED
-    append player to END of queue         # R10
+    remove player from queue entirely     # R10 — they leave the system
     fill_slot(game)                       # notify next person
 
 if response == "defer":
@@ -378,7 +378,7 @@ if slot.status != PENDING_CONFIRMATION:
     return   # already responded; ignore late fire
 
 handle_confirmation(player_id, game_id, "no", db)
-# → slot.status = DECLINED, player appended to END of queue, fill_slot called
+# → slot.status = DECLINED, player removed from queue entirely, fill_slot called
 ```
 
 ### 5.5 Ending a Game: `end_game(game_id, db)`

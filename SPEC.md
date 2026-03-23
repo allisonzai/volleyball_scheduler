@@ -29,7 +29,7 @@
    5 minutes (configurable).
 10. If they confirm **yes**, they are marked as playing.
 11. If they confirm **no** (or do not respond within the timeout), they will be
-    taken out of the current game and put at the end of the waiting list. The
+    taken out of the current game and not be added the waiting list. The
     next person in the waiting list who has not already deferred for the current
     game will be selected as a replacement.
 12. If they confirm **defer**, they will be taken out of the current game and

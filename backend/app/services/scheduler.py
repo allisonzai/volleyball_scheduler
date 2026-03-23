@@ -328,9 +328,9 @@ def handle_confirmation(player_id: int, game_id: int, response: str, db: Session
     elif response == "no":
         slot.status = SlotStatus.DECLINED
         db.flush()
-        _append_to_queue(db, player_id)
+        _remove_from_queue(db, player_id)
         fill_slot(db, game)
-        logger.info(f"Player {player_id} declined game {game_id} — moved to end of queue.")
+        logger.info(f"Player {player_id} declined game {game_id} — removed from queue.")
 
     elif response == "defer":
         slot.status = SlotStatus.DECLINED

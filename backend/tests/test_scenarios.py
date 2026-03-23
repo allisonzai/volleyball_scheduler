@@ -486,7 +486,7 @@ class TestScenario8_ConfigurableTimeout:
         assert settings.CONFIRM_TIMEOUT_SECONDS == 60
         settings.CONFIRM_TIMEOUT_SECONDS = original  # restore
 
-    def test_timed_out_player_moved_to_end_of_queue(self, db):
+    def test_timed_out_player_removed_from_queue(self, db):
         players = [register_and_queue(db, i) for i in range(1, 15)]
         game = scheduler.assign_next_game(db)
         db.commit()
@@ -505,8 +505,7 @@ class TestScenario8_ConfigurableTimeout:
 
         queue = scheduler.get_queue(db)
         queued_ids = [e.player_id for e in queue]
-        assert target_id in queued_ids, "Timed-out player should be back in queue"
-        assert queued_ids[-1] == target_id, "Timed-out player should be at END of queue"
+        assert target_id not in queued_ids, "Timed-out player should NOT be in queue"
 
     def test_timeout_triggers_next_player_notification(self, db):
         for i in range(1, 15):
@@ -613,7 +612,7 @@ class TestScenario10_ConfirmNo:
         db.refresh(slot)
         assert slot.status == SlotStatus.DECLINED
 
-    def test_no_puts_player_at_end_of_queue(self, db):
+    def test_no_removes_player_from_queue(self, db):
         for i in range(1, 15):
             register_and_queue(db, i)
         game = scheduler.assign_next_game(db)
@@ -625,8 +624,7 @@ class TestScenario10_ConfirmNo:
 
         queue = scheduler.get_queue(db)
         queued_ids = [e.player_id for e in queue]
-        assert target_id in queued_ids, "Player who said no should be back in queue"
-        assert queued_ids[-1] == target_id, "Player who said no should be at END of queue"
+        assert target_id not in queued_ids, "Player who said no should NOT be in queue"
 
     def test_no_triggers_next_player_slot(self, db):
         for i in range(1, 15):
@@ -706,12 +704,11 @@ class TestScenario11_ConfirmDefer:
             "Next queued player should be notified after a defer"
         )
 
-    def test_defer_vs_no_queue_position(self, db):
-        """Deferred player ends up ahead of declined player.
+    def test_defer_stays_in_queue_no_does_not(self, db):
+        """Deferred player stays in queue; declined player is removed entirely.
         With 20 players: 12 slotted (p1-p12), 8 in queue (p13-p20).
-        - p1 defers → fill_slot pulls p13 → p1 inserted at position 2 → queue: [p14, p1, p15..p20]
-        - p2 says no → fill_slot pulls p14 → p2 appended to end → queue: [p1, p15..p20, p2]
-        So defer_player_id is still ahead of no_player_id.
+        - p1 defers → fill_slot pulls p13 → p1 inserted at position 2
+        - p2 says no  → fill_slot pulls p14 → p2 removed from queue entirely
         """
         for i in range(1, 21):  # 20 players: 12 slotted, 8 in queue
             register_and_queue(db, i)
@@ -728,12 +725,8 @@ class TestScenario11_ConfirmDefer:
         queue = scheduler.get_queue(db)
         ids = [e.player_id for e in queue]
 
-        assert defer_player_id in ids, "Deferred player should be in queue"
-        assert no_player_id in ids, "Declined player should be in queue"
-        assert ids.index(defer_player_id) < ids.index(no_player_id), (
-            f"Deferred player (pos {ids.index(defer_player_id)}) should be ahead of "
-            f"declined player (pos {ids.index(no_player_id)})"
-        )
+        assert defer_player_id in ids, "Deferred player should remain in queue"
+        assert no_player_id not in ids, "Declined player should NOT be in queue"
 
 
 # ── SCENARIO 12 ──────────────────────────────────────────────────────────────
