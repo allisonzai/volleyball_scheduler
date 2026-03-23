@@ -13,6 +13,7 @@ class SlotOut(BaseModel):
     status: SlotStatus
     display_name: str
     signup_number: Optional[int] = None
+    notified_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 

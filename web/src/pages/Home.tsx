@@ -165,7 +165,7 @@ export default function Home() {
 
         {/* Confirmation banner */}
         {pendingSlot && player && game && (
-          <ConfirmationBanner game={game} playerId={player.id} playerToken={player.secret_token} onDone={refresh} />
+          <ConfirmationBanner game={game} slot={pendingSlot} playerId={player.id} playerToken={player.secret_token} onDone={refresh} />
         )}
 
         {/* Tab navigation */}

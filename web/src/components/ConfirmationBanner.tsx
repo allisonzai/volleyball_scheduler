@@ -1,16 +1,46 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { confirm } from "../api/client";
-import type { Game } from "../types";
+import type { Game, Slot } from "../types";
+
+const TIMEOUT_SECONDS = 300; // must match backend CONFIRM_TIMEOUT_SECONDS
+
+function useCountdown(notifiedAt: string | null): number {
+  const getSecondsLeft = () => {
+    if (!notifiedAt) return TIMEOUT_SECONDS;
+    const elapsed = Math.floor((Date.now() - new Date(notifiedAt + "Z").getTime()) / 1000);
+    return Math.max(0, TIMEOUT_SECONDS - elapsed);
+  };
+
+  const [secondsLeft, setSecondsLeft] = useState(getSecondsLeft);
+
+  useEffect(() => {
+    if (secondsLeft <= 0) return;
+    const id = setInterval(() => setSecondsLeft(getSecondsLeft()), 1000);
+    return () => clearInterval(id);
+  }, [notifiedAt]);
+
+  return secondsLeft;
+}
+
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
 
 interface Props {
   game: Game;
+  slot: Slot;
   playerId: number;
   playerToken: string;
   onDone: () => void;
 }
 
-export default function ConfirmationBanner({ game, playerId, playerToken, onDone }: Props) {
+export default function ConfirmationBanner({ game, slot, playerId, playerToken, onDone }: Props) {
   const [loading, setLoading] = useState(false);
+  const secondsLeft = useCountdown(slot.notified_at);
+
+  const urgent = secondsLeft <= 60;
 
   const handleResponse = async (response: "yes" | "no" | "defer") => {
     setLoading(true);
@@ -25,12 +55,21 @@ export default function ConfirmationBanner({ game, playerId, playerToken, onDone
   };
 
   return (
-    <div className="bg-yellow-50 border-2 border-yellow-400 rounded-2xl p-5 mb-4 shadow-lg animate-pulse-once">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-2xl">🏐</span>
-        <div>
-          <p className="font-bold text-yellow-800 text-lg">You're up for Game #{game.id}!</p>
-          <p className="text-yellow-700 text-sm">Confirm your spot to play.</p>
+    <div className={`border-2 rounded-2xl p-5 mb-4 shadow-lg ${urgent ? "bg-red-50 border-red-400" : "bg-yellow-50 border-yellow-400"}`}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-2xl">🏐</span>
+          <div>
+            <p className={`font-bold text-lg ${urgent ? "text-red-800" : "text-yellow-800"}`}>
+              You're up for Game #{game.id}!
+            </p>
+            <p className={`text-sm ${urgent ? "text-red-700" : "text-yellow-700"}`}>
+              Confirm your spot to play.
+            </p>
+          </div>
+        </div>
+        <div className={`text-2xl font-mono font-bold tabular-nums ${urgent ? "text-red-600 animate-pulse" : "text-yellow-700"}`}>
+          {formatTime(secondsLeft)}
         </div>
       </div>
       <div className="flex gap-3 flex-wrap">
@@ -53,11 +92,13 @@ export default function ConfirmationBanner({ game, playerId, playerToken, onDone
           onClick={() => handleResponse("defer")}
           className="flex-1 bg-blue-400 hover:bg-blue-500 text-white font-semibold py-2 px-4 rounded-xl transition disabled:opacity-50"
         >
-          Defer — Keep my spot
+          Defer — Swap with next
         </button>
       </div>
-      <p className="text-xs text-yellow-600 mt-3 text-center">
-        You have 5 minutes to respond. No response = moved to end of queue.
+      <p className={`text-xs mt-3 text-center ${urgent ? "text-red-500 font-medium" : "text-yellow-600"}`}>
+        {secondsLeft <= 0
+          ? "Time's up — you've been moved to the end of the queue."
+          : "No response = treated as No (moved to end of queue)."}
       </p>
     </div>
   );

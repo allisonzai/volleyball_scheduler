@@ -1,4 +1,4 @@
-export type SlotStatus = "pending_confirmation" | "confirmed" | "declined" | "timed_out";
+export type SlotStatus = "pending_confirmation" | "confirmed" | "declined" | "timed_out" | "withdrawn";
 export type GameStatus = "open" | "in_progress" | "finished";
 
 export interface Player {
@@ -21,6 +21,7 @@ export interface Slot {
   status: SlotStatus;
   display_name: string;
   signup_number: number | null;
+  notified_at: string | null;
 }
 
 export interface Game {
