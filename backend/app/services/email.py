@@ -5,11 +5,11 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-SENDGRID_URL = "https://api.sendgrid.com/v3/mail/send"
+BREVO_URL = "https://api.brevo.com/v3/smtp/email"
 
 
 def send_verification_email(to_address: str, display_name: str, code: str) -> None:
-    """Send a verification code via SendGrid's HTTP API."""
+    """Send a verification code via Brevo's HTTP API."""
     subject = "Volleyball Scheduler — verify your account"
     body = (
         f"Hi {display_name},\n\n"
@@ -23,19 +23,19 @@ def send_verification_email(to_address: str, display_name: str, code: str) -> No
         return
 
     payload = {
-        "personalizations": [{"to": [{"email": to_address}]}],
-        "from": {"email": settings.EMAIL_FROM, "name": "Volleyball Scheduler"},
+        "sender": {"name": "Volleyball Scheduler", "email": settings.EMAIL_FROM},
+        "to": [{"email": to_address}],
         "subject": subject,
-        "content": [{"type": "text/plain", "value": body}],
+        "textContent": body,
     }
     headers = {
-        "Authorization": f"Bearer {settings.SENDGRID_API_KEY}",
+        "api-key": settings.BREVO_API_KEY,
         "Content-Type": "application/json",
     }
 
-    response = httpx.post(SENDGRID_URL, json=payload, headers=headers, timeout=10)
-    if response.status_code not in (200, 202):
-        logger.error(f"SendGrid error {response.status_code}: {response.text}")
+    response = httpx.post(BREVO_URL, json=payload, headers=headers, timeout=10)
+    if response.status_code not in (200, 201):
+        logger.error(f"Brevo error {response.status_code}: {response.text}")
         raise RuntimeError(f"Failed to send verification email (status {response.status_code})")
 
     logger.info(f"Verification email sent to {to_address}")

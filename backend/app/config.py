@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     STUB_PUSH: bool = True
     STUB_EMAIL: bool = True
 
-    # SendGrid — used to send verification emails over HTTPS
-    SENDGRID_API_KEY: str = ""
+    # Brevo — used to send verification emails over HTTPS
+    BREVO_API_KEY: str = ""
     EMAIL_FROM: str = "allisonazhang@gmail.com"
 
     # SMS — Twilio credentials + your Google Voice / Twilio FROM number
