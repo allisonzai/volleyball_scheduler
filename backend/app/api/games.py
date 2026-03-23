@@ -95,6 +95,16 @@ def reset_all(
     db.commit()
 
 
+@router.delete("/history", status_code=204)
+def clear_history(
+    x_operator_secret: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    _require_operator(x_operator_secret)
+    scheduler.clear_history(db)
+    db.commit()
+
+
 @router.post("/start", response_model=GameOut, status_code=201)
 def start_game(
     x_operator_secret: Optional[str] = Header(default=None),

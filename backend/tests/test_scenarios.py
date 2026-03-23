@@ -1020,7 +1020,7 @@ class TestScenario16_ResetAll:
 
         assert len(scheduler.get_queue(db)) == 0, "Queue must be empty after reset"
 
-    def test_reset_deletes_active_game(self, db):
+    def test_reset_marks_active_game_finished(self, db):
         for i in range(1, 13):
             register_and_queue(db, i)
         game = scheduler.assign_next_game(db)
@@ -1029,13 +1029,12 @@ class TestScenario16_ResetAll:
         db.commit()
 
         assert game.status == GameStatus.IN_PROGRESS
-        game_id = game.id
 
         scheduler.reset_all(db)
         db.commit()
 
-        remaining = db.query(Game).filter(Game.id == game_id).first()
-        assert remaining is None, "Active game should be deleted after reset"
+        db.refresh(game)
+        assert game.status == GameStatus.FINISHED, "Active game should be FINISHED after reset"
 
     def test_reset_preserves_player_accounts(self, db):
         players = [register_and_queue(db, i) for i in range(1, 6)]
@@ -1068,34 +1067,27 @@ class TestScenario16_ResetAll:
         db.commit()
 
         assert game.status == GameStatus.OPEN
+
+        scheduler.reset_all(db)
+        db.commit()
+
+        db.refresh(game)
+        assert game.status == GameStatus.FINISHED
+        assert len(scheduler.get_queue(db)) == 0
+
+    def test_reset_preserves_game_history(self, db):
+        """Start Over keeps game records — they still appear in Past Games."""
+        for i in range(1, 13):
+            register_and_queue(db, i)
+        game = scheduler.assign_next_game(db)
+        db.commit()
         game_id = game.id
 
         scheduler.reset_all(db)
         db.commit()
 
         remaining = db.query(Game).filter(Game.id == game_id).first()
-        assert remaining is None, "Open game should be deleted after reset"
-        assert len(scheduler.get_queue(db)) == 0
-
-    def test_reset_resets_game_id_sequence(self, db):
-        """After Start Over, the next game should start at ID 1 again."""
-        players = [register_and_queue(db, i) for i in range(1, 6)]
-        game1 = scheduler.assign_next_game(db)
-        db.commit()
-        first_id = game1.id
-
-        scheduler.reset_all(db)
-        db.commit()
-
-        # Re-queue existing players (player accounts were preserved)
-        for p in players:
-            add_to_queue(db, p)
-        game2 = scheduler.assign_next_game(db)
-        db.commit()
-
-        assert game2.id == first_id, (
-            f"After Start Over, game ID should reset to {first_id}, got {game2.id}"
-        )
+        assert remaining is not None, "Game record should be preserved after Start Over"
 
 
 # ── SCENARIO 17 ──────────────────────────────────────────────────────────────
@@ -1208,3 +1200,79 @@ class TestScenario17_Deregister:
         assert active_slot is None, (
             "After game ends (no auto-start), player is in queue — deregister should be allowed"
         )
+
+
+# ── SCENARIO 18 ──────────────────────────────────────────────────────────────
+# "In the Past Games tab, the operator can clear history."
+
+class TestScenario18_ClearHistory:
+    def test_clear_history_deletes_finished_games(self, db):
+        for i in range(1, 13):
+            register_and_queue(db, i)
+        game = scheduler.assign_next_game(db)
+        for slot in game.slots:
+            scheduler.handle_confirmation(slot.player_id, game.id, "yes", db)
+        scheduler.end_game(game.id, db)
+        db.commit()
+
+        db.refresh(game)
+        assert game.status == GameStatus.FINISHED
+        game_id = game.id  # capture before deletion
+
+        scheduler.clear_history(db)
+        db.commit()
+
+        remaining = db.query(Game).filter(Game.id == game_id).first()
+        assert remaining is None, "Finished game should be deleted after clear_history"
+
+    def test_clear_history_resets_game_id_sequence(self, db):
+        """After clearing history, the next game starts at ID 1 again."""
+        players = [register_and_queue(db, i) for i in range(1, 6)]
+        game1 = scheduler.assign_next_game(db)
+        db.commit()
+        first_id = game1.id
+
+        scheduler.reset_all(db)  # marks game FINISHED, clears queue
+        scheduler.clear_history(db)  # deletes finished games
+        db.commit()
+
+        for p in players:
+            add_to_queue(db, p)
+        game2 = scheduler.assign_next_game(db)
+        db.commit()
+
+        assert game2.id == first_id, (
+            f"After clearing history, game ID should reset to {first_id}, got {game2.id}"
+        )
+
+    def test_clear_history_preserves_active_game(self, db):
+        """clear_history only removes FINISHED games; active game is untouched."""
+        for i in range(1, 13):
+            register_and_queue(db, i)
+        active_game = scheduler.assign_next_game(db)
+        for slot in active_game.slots:
+            scheduler.handle_confirmation(slot.player_id, active_game.id, "yes", db)
+        db.commit()
+
+        assert active_game.status == GameStatus.IN_PROGRESS
+
+        scheduler.clear_history(db)
+        db.commit()
+
+        db.refresh(active_game)
+        assert active_game.status == GameStatus.IN_PROGRESS, (
+            "Active game should not be touched by clear_history"
+        )
+
+    def test_clear_history_preserves_player_accounts(self, db):
+        players = [register_and_queue(db, i) for i in range(1, 5)]
+        game = scheduler.assign_next_game(db)
+        scheduler.end_game(game.id, db)
+        db.commit()
+
+        scheduler.clear_history(db)
+        db.commit()
+
+        from app.models.player import Player as PlayerModel
+        for p in players:
+            assert db.query(PlayerModel).filter(PlayerModel.id == p.id).first() is not None
