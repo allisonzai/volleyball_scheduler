@@ -13,9 +13,9 @@ class Settings(BaseSettings):
     STUB_PUSH: bool = True
     STUB_EMAIL: bool = True
 
-    # Brevo — used to send verification emails over HTTPS
-    BREVO_API_KEY: str = ""
-    EMAIL_FROM: str = "allisonazhang@gmail.com"
+    # Resend — used to send verification emails over HTTPS
+    RESEND_API_KEY: str = ""
+    EMAIL_FROM: str = "Volleyball Scheduler <onboarding@resend.dev>"
 
     # SMS — Twilio credentials + your Google Voice / Twilio FROM number
     TWILIO_ACCOUNT_SID: str = ""
