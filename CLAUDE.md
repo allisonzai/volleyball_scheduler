@@ -13,14 +13,14 @@ A full-stack volleyball game scheduling system.
 
 ## Key documents
 
-| Source | Purpose |
-|--------|---------|
-| https://bit.ly/3PSKZTa | Original requirements document (authoritative source) |
-| `SPEC.md` | Plain-text transcription of the above — use this for quick reference |
-| `DESIGN.md` | Architecture, data model, API reference, algorithm pseudocode (regenerate if missing) |
+| Source                 | Purpose                                                                               |
+| ---------------------- | ------------------------------------------------------------------------------------- |
+| https://bit.ly/3PSKZTa | Original requirements document (authoritative source)                                 |
+| `SPEC.md`              | Plain-text transcription of the above — use this for quick reference                  |
+| `DESIGN.md`            | Architecture, data model, API reference, algorithm pseudocode (regenerate if missing) |
 
-When starting a new feature, check the requirements URL or `SPEC.md` first.
-If a requirement is not covered there, discuss with the user before adding it.
+When starting a new feature, check the requirements URL or `SPEC.md` first. If a
+requirement is not covered there, discuss with the user before adding it.
 
 ## Running the backend
 
@@ -43,8 +43,8 @@ models.
 ## Python conventions
 
 - Python 3.9 — always add `from __future__ import annotations` at the top of
-  every file and use `Optional[T]` / `List[T]` from `typing` (not `T | None`
-  or `list[T]`).
+  every file and use `Optional[T]` / `List[T]` from `typing` (not `T | None` or
+  `list[T]`).
 - SQLAlchemy 2 declarative style with `Mapped[]` columns.
 - After inserting rows via FK (not ORM relationship), call `db.expire(obj)` to
   force lazy-reload of relationship collections.
@@ -59,8 +59,8 @@ models.
 
 ## Test fixture note
 
-`make_player()` in `tests/test_scenarios.py` must set `is_verified=True` and
-a non-null `secret_token` so unit tests bypass the verification/auth layer.
+`make_player()` in `tests/test_scenarios.py` must set `is_verified=True` and a
+non-null `secret_token` so unit tests bypass the verification/auth layer.
 
 ## Environment variables (`.env`)
 

@@ -19,21 +19,25 @@
 
 ## 1. Overview
 
-Volleyball Scheduler is a full-stack application that manages recreational volleyball game scheduling and player queue rotation. Players register once, then sign up to play any number of times. The system ensures fair ordering via first-come-first-served queue management, handles player confirmations, and automatically rotates players between games.
+Volleyball Scheduler is a full-stack application that manages recreational
+volleyball game scheduling and player queue rotation. Players register once,
+then sign up to play any number of times. The system ensures fair ordering via
+first-come-first-served queue management, handles player confirmations, and
+automatically rotates players between games.
 
 ### Components
 
-| Component | Technology | Purpose |
-|---|---|---|
-| Backend API | Python 3.9 · FastAPI · SQLAlchemy 2.0 | Business logic, scheduling, persistence |
-| Database | SQLite (file-based) | Player, game, and queue state |
-| Web App | React 18 · Vite · Tailwind CSS | Browser interface |
-| Mobile App | React Native · Expo | iOS and Android interface |
-| SMS | Twilio (stubbed by default) | Confirmation notifications |
-| Push Notifications | Expo Push API (stubbed by default) | In-app alerts |
-| Email | Resend HTTP API (stubbed by default) | Future use; currently auto-verify skips email |
-| Backend hosting | PythonAnywhere (free tier, WSGI) | Production backend |
-| Frontend hosting | Vercel | Production web frontend |
+| Component          | Technology                            | Purpose                                       |
+| ------------------ | ------------------------------------- | --------------------------------------------- |
+| Backend API        | Python 3.9 · FastAPI · SQLAlchemy 2.0 | Business logic, scheduling, persistence       |
+| Database           | SQLite (file-based)                   | Player, game, and queue state                 |
+| Web App            | React 18 · Vite · Tailwind CSS        | Browser interface                             |
+| Mobile App         | React Native · Expo                   | iOS and Android interface                     |
+| SMS                | Twilio (stubbed by default)           | Confirmation notifications                    |
+| Push Notifications | Expo Push API (stubbed by default)    | In-app alerts                                 |
+| Email              | Resend HTTP API (stubbed by default)  | Future use; currently auto-verify skips email |
+| Backend hosting    | PythonAnywhere (free tier, WSGI)      | Production backend                            |
+| Frontend hosting   | Vercel                                | Production web frontend                       |
 
 ---
 
@@ -41,24 +45,24 @@ Volleyball Scheduler is a full-stack application that manages recreational volle
 
 The following rules are taken directly from the specification.
 
-| # | Rule |
-|---|---|
-| R1 | Every game can have at most 12 players. |
-| R2 | Every player must sign up and receive a number assigned on a first-come-first-served basis. |
-| R3 | If more than 12 players are present, the first 12 play and the rest wait. |
-| R4 | Players who arrive while a game is ongoing join the waiting list. |
-| R5 | When a game ends, court players rotate to the end of the waiting list. The next 12 in line play the following game. |
-| R6 | Even when 12 or fewer players are present, each must still confirm before the game starts. |
-| R7 | Any player may leave the waiting list at any time. A player in the waiting list may also defer to swap positions with the next person behind them. |
-| R7a | A confirmed player may leave an active game at any time. They are removed from both the game and the waiting list entirely. The next queued player is notified. |
-| R7b | The operator may "Start Over" to cancel the active game and clear the waiting list. Player accounts are preserved. |
-| R8 | When a player is scheduled, they are notified and have up to 5 minutes (configurable) to respond. |
-| R9 | Responding **yes** marks the player as playing. |
-| R10 | Responding **no** (or not responding within the timeout) removes the player from the current game and from the waiting list entirely. The **first** person in the waiting list who has not already deferred for the current game is notified as replacement. |
+| #   | Rule                                                                                                                                                                                                                                                                                                                                              |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | Every game can have at most 12 players.                                                                                                                                                                                                                                                                                                           |
+| R2  | Every player must sign up and receive a number assigned on a first-come-first-served basis.                                                                                                                                                                                                                                                       |
+| R3  | If more than 12 players are present, the first 12 play and the rest wait.                                                                                                                                                                                                                                                                         |
+| R4  | Players who arrive while a game is ongoing join the waiting list.                                                                                                                                                                                                                                                                                 |
+| R5  | When a game ends, court players rotate to the end of the waiting list. The next 12 in line play the following game.                                                                                                                                                                                                                               |
+| R6  | Even when 12 or fewer players are present, each must still confirm before the game starts.                                                                                                                                                                                                                                                        |
+| R7  | Any player may leave the waiting list at any time. A player in the waiting list may also defer to swap positions with the next person behind them.                                                                                                                                                                                                |
+| R7a | A confirmed player may leave an active game at any time. They are removed from both the game and the waiting list entirely. The next queued player is notified.                                                                                                                                                                                   |
+| R7b | The operator may "Start Over" to cancel the active game and clear the waiting list. Player accounts are preserved.                                                                                                                                                                                                                                |
+| R8  | When a player is scheduled, they are notified and have up to 5 minutes (configurable) to respond.                                                                                                                                                                                                                                                 |
+| R9  | Responding **yes** marks the player as playing.                                                                                                                                                                                                                                                                                                   |
+| R10 | Responding **no** (or not responding within the timeout) removes the player from the current game and from the waiting list entirely. The **first** person in the waiting list who has not already deferred for the current game is notified as replacement.                                                                                      |
 | R11 | Responding **defer** swaps the player with the **first** person in the waiting list who has not already deferred for the current game. That person fills the vacated slot; the deferred player is re-inserted into the queue immediately before the next player who has not yet had a slot in this game, preserving their original signup number. |
-| R12 | Confirmation is done by clicking **yes**, **no**, or **defer** in the app. |
-| R13 | Players are displayed as "FirstName L" — duplicates are disambiguated by appending the last 4 digits of their phone number in brackets, e.g. `Alice J [4242]`. |
-| R14 | Every player on the court and waiting list is shown alongside their signup number. |
+| R12 | Confirmation is done by clicking **yes**, **no**, or **defer** in the app.                                                                                                                                                                                                                                                                        |
+| R13 | Players are displayed as "FirstName L" — duplicates are disambiguated by appending the last 4 digits of their phone number in brackets, e.g. `Alice J [4242]`.                                                                                                                                                                                    |
+| R14 | Every player on the court and waiting list is shown alongside their signup number.                                                                                                                                                                                                                                                                |
 
 ---
 
@@ -242,14 +246,14 @@ volleyball_scheduler/
 
 ### 4.2 Key Invariants
 
-| Invariant | Description |
-|---|---|
-| `WaitingList.player_id` is UNIQUE | A player appears at most once in the queue at any time. |
-| `WaitingList.signup_number` is monotonically increasing | Assigned from a global counter; resets to 1 after Start Over (queue cleared). |
-| `WaitingList.position` is compacted to `1..N` | Resequenced after every mutation (join, leave, defer). |
-| `GameSlot.signup_number` is copied at slot creation | Captured from the player's `WaitingList` entry before they are removed from the queue; persists for display in the game view and past games history. |
-| A player has at most one slot per game | `fill_slot` excludes players who have any slot (any status) in the current game. |
-| `GameSlot.position` values are unique within a game | Tracks physical court seat assignment. |
+| Invariant                                               | Description                                                                                                                                          |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WaitingList.player_id` is UNIQUE                       | A player appears at most once in the queue at any time.                                                                                              |
+| `WaitingList.signup_number` is monotonically increasing | Assigned from a global counter; resets to 1 after Start Over (queue cleared).                                                                        |
+| `WaitingList.position` is compacted to `1..N`           | Resequenced after every mutation (join, leave, defer).                                                                                               |
+| `GameSlot.signup_number` is copied at slot creation     | Captured from the player's `WaitingList` entry before they are removed from the queue; persists for display in the game view and past games history. |
+| A player has at most one slot per game                  | `fill_slot` excludes players who have any slot (any status) in the current game.                                                                     |
+| `GameSlot.position` values are unique within a game     | Tracks physical court seat assignment.                                                                                                               |
 
 ### 4.3 Game Status Transitions
 
@@ -288,7 +292,8 @@ All scheduling logic is in `backend/app/services/scheduler.py`.
 
 ### 5.1 Starting a Game: `assign_next_game(db)`
 
-Called by the operator via `POST /api/games/start`. The operator must manually trigger this after each game ends.
+Called by the operator via `POST /api/games/start`. The operator must manually
+trigger this after each game ends.
 
 ```
 queue = get_queue(db)                          # ordered by position ASC
@@ -336,7 +341,9 @@ expire game
 return True
 ```
 
-The `already_slotted` check is the key invariant that prevents a player from being drawn twice for the same game — even if they were declined, timed out, or deferred and placed back at the front of the queue.
+The `already_slotted` check is the key invariant that prevents a player from
+being drawn twice for the same game — even if they were declined, timed out, or
+deferred and placed back at the front of the queue.
 
 ### 5.3 Handling a Confirmation: `handle_confirmation(player_id, game_id, response, db)`
 
@@ -381,11 +388,23 @@ else:
             break               # queue exhausted; fill_slot starts game if confirmed > 0
 ```
 
-Key design: the `confirmed == 0` check was intentionally **removed**. If every player in the initial group times out (confirmed = 0), batch fill still runs so that queue players get their turn. Those new players will confirm or decline; the game starts once at least one of them confirms yes. If the queue is also empty and confirmed = 0, the game remains in OPEN state until the operator clicks Start Over.
+Key design: the `confirmed == 0` check was intentionally **removed**. If every
+player in the initial group times out (confirmed = 0), batch fill still runs so
+that queue players get their turn. Those new players will confirm or decline;
+the game starts once at least one of them confirms yes. If the queue is also
+empty and confirmed = 0, the game remains in OPEN state until the operator
+clicks Start Over.
 
 ---
 
-**Why `fill_slot` before re-insert for defer:** `fill_slot` removes and promotes the first eligible player, updating `game.slots`. Only after that is `already_slotted` rebuilt so the re-insert function can correctly identify which queue entries have already had a slot in this game. The deferred player is placed immediately before the first remaining queue entry that has no slot in this game — i.e., right after any players who have already deferred (and therefore already appear in `already_slotted`). Their original `signup_number` is carried over from their `GameSlot` record.
+**Why `fill_slot` before re-insert for defer:** `fill_slot` removes and promotes
+the first eligible player, updating `game.slots`. Only after that is
+`already_slotted` rebuilt so the re-insert function can correctly identify which
+queue entries have already had a slot in this game. The deferred player is
+placed immediately before the first remaining queue entry that has no slot in
+this game — i.e., right after any players who have already deferred (and
+therefore already appear in `already_slotted`). Their original `signup_number`
+is carried over from their `GameSlot` record.
 
 ### 5.4 Handling a Timeout: `handle_timeout(player_id, game_id, db)`
 
@@ -437,7 +456,9 @@ fill_slot(db, game)                # notify next waiting player
 
 ### 5.7 Reset All: `reset_all(db)`
 
-Operator-triggered "Start Over" (R7b). Cancels the active game and clears the waiting list. Game **history is preserved** (finished games remain in Past Games). Player accounts are not deleted.
+Operator-triggered "Start Over" (R7b). Cancels the active game and clears the
+waiting list. Game **history is preserved** (finished games remain in Past
+Games). Player accounts are not deleted.
 
 ```
 cancel all pending timeout timers
@@ -450,7 +471,9 @@ DELETE all WaitingList rows
 
 ### 5.8a Clear History: `clear_history(db)`
 
-Deletes all FINISHED game records and their slots. Because SQLAlchemy does not use `AUTOINCREMENT`, deleting all games resets the SQLite ID counter so the next game starts at #1.
+Deletes all FINISHED game records and their slots. Because SQLAlchemy does not
+use `AUTOINCREMENT`, deleting all games resets the SQLite ID counter so the next
+game starts at #1.
 
 ```
 finished_ids = [g.id for g in FINISHED games]
@@ -461,7 +484,8 @@ DELETE Game rows where id IN finished_ids
 
 ### 5.9 Queue Defer: `defer_in_queue(player_id, db)`
 
-Waiting-list players can swap positions with the person immediately behind them (R7).
+Waiting-list players can swap positions with the person immediately behind them
+(R7).
 
 ```
 entry = get WaitingList entry for player_id
@@ -478,16 +502,23 @@ resequence (compact positions to 1..N)
 
 The `WaitingList` table uses two independent numbers per entry:
 
-| Field | Meaning | Mutability |
-|---|---|---|
+| Field           | Meaning                                                                     | Mutability                                                                          |
+| --------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | `signup_number` | Queue join order for this session (1, 2, 3…). Resets to 1 after Start Over. | **Never changes** once assigned. Shown in UI as the player's number for this round. |
-| `position` | Current queue rank (1 = next to play) | **Resequenced** to compact integers after every mutation. |
+| `position`      | Current queue rank (1 = next to play)                                       | **Resequenced** to compact integers after every mutation.                           |
 
-When a player moves from the queue into a game slot, their `signup_number` is copied onto the `GameSlot` record **before** the `WaitingList` row is deleted. This ensures the number is available for display in the court view and past games history even after the player is no longer in the queue.
+When a player moves from the queue into a game slot, their `signup_number` is
+copied onto the `GameSlot` record **before** the `WaitingList` row is deleted.
+This ensures the number is available for display in the court view and past
+games history even after the player is no longer in the queue.
 
-When a player **defers** and is re-inserted into the queue, their `signup_number` is read back from their `GameSlot` record and written onto the new `WaitingList` entry. This preserves the original number — a defer does not cause a player to receive a new, higher number.
+When a player **defers** and is re-inserted into the queue, their
+`signup_number` is read back from their `GameSlot` record and written onto the
+new `WaitingList` entry. This preserves the original number — a defer does not
+cause a player to receive a new, higher number.
 
-After every structural change (add, remove, prepend), `_resequence()` renumbers all remaining entries as `1, 2, 3, …N` to prevent gaps.
+After every structural change (add, remove, prepend), `_resequence()` renumbers
+all remaining entries as `1, 2, 3, …N` to prevent gaps.
 
 ---
 
@@ -495,15 +526,16 @@ After every structural change (add, remove, prepend), `_resequence()` renumbers 
 
 ### Players
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `POST` | `/api/players` | None | Register a new player. Returns 400 if phone or email already registered. Players are auto-verified. |
-| `POST` | `/api/players/signin` | None | Sign in with phone + password. Returns player object with secret token. |
-| `GET` | `/api/players/{id}` | None | Get a player's profile. |
-| `DELETE` | `/api/players/{id}` | `X-Player-Token` | Permanently deregister. Returns 400 if player has active game slot. |
-| `PATCH` | `/api/players/{id}/push-token` | None | Update the player's Expo push token. |
+| Method   | Path                           | Auth             | Description                                                                                         |
+| -------- | ------------------------------ | ---------------- | --------------------------------------------------------------------------------------------------- |
+| `POST`   | `/api/players`                 | None             | Register a new player. Returns 400 if phone or email already registered. Players are auto-verified. |
+| `POST`   | `/api/players/signin`          | None             | Sign in with phone + password. Returns player object with secret token.                             |
+| `GET`    | `/api/players/{id}`            | None             | Get a player's profile.                                                                             |
+| `DELETE` | `/api/players/{id}`            | `X-Player-Token` | Permanently deregister. Returns 400 if player has active game slot.                                 |
+| `PATCH`  | `/api/players/{id}/push-token` | None             | Update the player's Expo push token.                                                                |
 
 **Register request body:**
+
 ```json
 {
   "first_name": "Alice",
@@ -515,6 +547,7 @@ After every structural change (add, remove, prepend), `_resequence()` renumbers 
 ```
 
 **Sign-in request body:**
+
 ```json
 {
   "phone": "+12125551234",
@@ -524,14 +557,15 @@ After every structural change (add, remove, prepend), `_resequence()` renumbers 
 
 ### Queue
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `GET` | `/api/queue` | None | Return the waiting list ordered by position. |
-| `POST` | `/api/queue/join` | `X-Player-Token` | Add a player to the end of the queue. Body: `{"player_id": 1}`. |
-| `DELETE` | `/api/queue/{player_id}` | `X-Player-Token` | Remove a player from the queue. |
-| `POST` | `/api/queue/{player_id}/defer` | `X-Player-Token` | Swap the player with the next person behind them in the queue. Returns 400 if already last. |
+| Method   | Path                           | Auth             | Description                                                                                 |
+| -------- | ------------------------------ | ---------------- | ------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/queue`                   | None             | Return the waiting list ordered by position.                                                |
+| `POST`   | `/api/queue/join`              | `X-Player-Token` | Add a player to the end of the queue. Body: `{"player_id": 1}`.                             |
+| `DELETE` | `/api/queue/{player_id}`       | `X-Player-Token` | Remove a player from the queue.                                                             |
+| `POST`   | `/api/queue/{player_id}/defer` | `X-Player-Token` | Swap the player with the next person behind them in the queue. Returns 400 if already last. |
 
 **Queue entry response:**
+
 ```json
 {
   "player_id": 3,
@@ -544,18 +578,19 @@ After every structural change (add, remove, prepend), `_resequence()` renumbers 
 
 ### Games
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `GET` | `/api/games/current` | None | Return the active game (OPEN or IN_PROGRESS), or `null`. |
-| `GET` | `/api/games` | None | List all games. Optional `?status=` filter. |
-| `GET` | `/api/games/{id}` | None | Get a specific game with all its slots. |
-| `POST` | `/api/games/start` | `X-Operator-Secret` | Create and populate the next game from the queue. |
-| `POST` | `/api/games/{id}/end` | `X-Operator-Secret` | Mark a game finished and trigger rotation. |
-| `POST` | `/api/games/reset` | `X-Operator-Secret` | Cancel active game and clear waiting list (Start Over). History preserved. |
-| `DELETE` | `/api/games/history` | `X-Operator-Secret` | Delete all finished game records and reset game ID sequence. |
-| `POST` | `/api/games/{id}/leave` | `X-Player-Token` | Confirmed player leaves an active game mid-play (removed from queue entirely). |
+| Method   | Path                    | Auth                | Description                                                                    |
+| -------- | ----------------------- | ------------------- | ------------------------------------------------------------------------------ |
+| `GET`    | `/api/games/current`    | None                | Return the active game (OPEN or IN_PROGRESS), or `null`.                       |
+| `GET`    | `/api/games`            | None                | List all games. Optional `?status=` filter.                                    |
+| `GET`    | `/api/games/{id}`       | None                | Get a specific game with all its slots.                                        |
+| `POST`   | `/api/games/start`      | `X-Operator-Secret` | Create and populate the next game from the queue.                              |
+| `POST`   | `/api/games/{id}/end`   | `X-Operator-Secret` | Mark a game finished and trigger rotation.                                     |
+| `POST`   | `/api/games/reset`      | `X-Operator-Secret` | Cancel active game and clear waiting list (Start Over). History preserved.     |
+| `DELETE` | `/api/games/history`    | `X-Operator-Secret` | Delete all finished game records and reset game ID sequence.                   |
+| `POST`   | `/api/games/{id}/leave` | `X-Player-Token`    | Confirmed player leaves an active game mid-play (removed from queue entirely). |
 
 **Game response:**
+
 ```json
 {
   "id": 1,
@@ -580,12 +615,13 @@ After every structural change (add, remove, prepend), `_resequence()` renumbers 
 
 ### Confirmation
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/confirm` | Submit a yes/no/defer response (from app button). |
+| Method | Path               | Description                                            |
+| ------ | ------------------ | ------------------------------------------------------ |
+| `POST` | `/api/confirm`     | Submit a yes/no/defer response (from app button).      |
 | `POST` | `/api/sms/webhook` | Twilio inbound SMS webhook (from player text message). |
 
 **Confirm request body:**
+
 ```json
 {
   "player_id": 1,
@@ -594,17 +630,23 @@ After every structural change (add, remove, prepend), `_resequence()` renumbers 
 }
 ```
 
-**SMS webhook:** Receives Twilio's standard `application/x-www-form-urlencoded` POST. Parses `From` (phone number) and `Body` (yes/no/defer). Returns TwiML `<Message>` response.
+**SMS webhook:** Receives Twilio's standard `application/x-www-form-urlencoded`
+POST. Parses `From` (phone number) and `Body` (yes/no/defer). Returns TwiML
+`<Message>` response.
 
 ### Real-time Events
 
-> **Note:** The SSE endpoint exists in the backend but is **not used** by the web frontend. PythonAnywhere's WSGI adapter (a2wsgi) would block a worker thread for every open SSE connection. The web app uses 5-second polling instead.
+> **Note:** The SSE endpoint exists in the backend but is **not used** by the
+> web frontend. PythonAnywhere's WSGI adapter (a2wsgi) would block a worker
+> thread for every open SSE connection. The web app uses 5-second polling
+> instead.
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/events` | Server-Sent Events stream (available but unused by current clients). |
+| Method | Path          | Description                                                          |
+| ------ | ------------- | -------------------------------------------------------------------- |
+| `GET`  | `/api/events` | Server-Sent Events stream (available but unused by current clients). |
 
 Events are plain strings wrapped in the SSE `data:` format:
+
 - `data: connected` — on initial connect
 - `data: {"type": "game_update"}` — game state changed
 - `data: {"type": "queue_update"}` — waiting list changed
@@ -618,9 +660,15 @@ Events are plain strings wrapped in the SSE `data:` format:
 
 A player is notified via two channels simultaneously:
 
-1. **SMS** — A text message containing the game number, confirmation deadline, and a link to the app. Sent via Twilio. Configurable with `STUB_SMS=true` for development (messages are logged instead of sent).
+1. **SMS** — A text message containing the game number, confirmation deadline,
+   and a link to the app. Sent via Twilio. Configurable with `STUB_SMS=true` for
+   development (messages are logged instead of sent).
 
-2. **Push notification** — A push alert sent to the player's registered Expo token. Sent via the Expo Push HTTP v2 API. Configurable with `STUB_PUSH=true` for development. The notification payload includes `game_id` and `player_id` in the `data` field so the mobile app can display the confirmation modal immediately on tap.
+2. **Push notification** — A push alert sent to the player's registered Expo
+   token. Sent via the Expo Push HTTP v2 API. Configurable with `STUB_PUSH=true`
+   for development. The notification payload includes `game_id` and `player_id`
+   in the `data` field so the mobile app can display the confirmation modal
+   immediately on tap.
 
 ### 7.2 Inbound SMS Flow
 
@@ -643,16 +691,24 @@ Backend
 
 ### 7.3 Timeout Management
 
-Confirmation timeouts are managed with `threading.Timer` (not asyncio). This is required for compatibility with PythonAnywhere's WSGI/uWSGI environment, where asyncio tasks do not survive the uWSGI fork process.
+Confirmation timeouts are managed with `threading.Timer` (not asyncio). This is
+required for compatibility with PythonAnywhere's WSGI/uWSGI environment, where
+asyncio tasks do not survive the uWSGI fork process.
 
 - When a slot is created, `_schedule_timeout(player_id, game_id)` is called.
-- A `threading.Timer(CONFIRM_TIMEOUT_SECONDS, _timeout_job)` is started. The timer is daemon-mode so it doesn't prevent server shutdown.
-- `_timeout_job` opens a new DB session, calls `handle_timeout()`, commits, then closes the session.
+- A `threading.Timer(CONFIRM_TIMEOUT_SECONDS, _timeout_job)` is started. The
+  timer is daemon-mode so it doesn't prevent server shutdown.
+- `_timeout_job` opens a new DB session, calls `handle_timeout()`, commits, then
+  closes the session.
 - Timers are stored in `_timeout_tasks: dict[(player_id, game_id), Timer]`.
-- When a player responds (any answer), `_cancel_timeout(player_id, game_id)` calls `timer.cancel()`.
+- When a player responds (any answer), `_cancel_timeout(player_id, game_id)`
+  calls `timer.cancel()`.
 - `reset_all()` cancels all pending timers and clears `_timeout_tasks`.
 
-**Limitation:** In-process timers do not survive a server restart. If the server restarts while a game is in confirmation, the 5-minute clocks reset. For production, these could be replaced with a persistent task queue (e.g., ARQ + Redis).
+**Limitation:** In-process timers do not survive a server restart. If the server
+restarts while a game is in confirmation, the 5-minute clocks reset. For
+production, these could be replaced with a persistent task queue (e.g., ARQ +
+Redis).
 
 ---
 
@@ -660,7 +716,9 @@ Confirmation timeouts are managed with `threading.Timer` (not asyncio). This is 
 
 ### 8.1 Web Application
 
-Built with React 18, Vite, and Tailwind CSS. Single-page application served on port 5173 in development, with a Vite proxy forwarding `/api` requests to the backend on port 8000.
+Built with React 18, Vite, and Tailwind CSS. Single-page application served on
+port 5173 in development, with a Vite proxy forwarding `/api` requests to the
+backend on port 8000.
 
 #### Page Layout
 
@@ -699,21 +757,26 @@ Built with React 18, Vite, and Tailwind CSS. Single-page application served on p
 
 #### State Management
 
-Player identity is stored in `localStorage` (via `usePlayer` hook) and persists across page reloads. No authentication is implemented; the app operates on a trusted local network model.
+Player identity is stored in `localStorage` (via `usePlayer` hook) and persists
+across page reloads. No authentication is implemented; the app operates on a
+trusted local network model.
 
-Live game state is fetched via the `useGameState` hook, which polls `/api/games/current` and `/api/queue` every 5 seconds. SSE was removed because PythonAnywhere's WSGI adapter would block one worker per open connection.
+Live game state is fetched via the `useGameState` hook, which polls
+`/api/games/current` and `/api/queue` every 5 seconds. SSE was removed because
+PythonAnywhere's WSGI adapter would block one worker per open connection.
 
 ### 8.2 Mobile Application
 
-Built with React Native and Expo, using Expo Router for file-based navigation. Shares the same API surface as the web app.
+Built with React Native and Expo, using Expo Router for file-based navigation.
+Shares the same API surface as the web app.
 
 #### Screens
 
-| Screen | File | Description |
-|---|---|---|
-| Home | `app/index.tsx` | Court view, queue, controls, confirmation modal |
-| Register | `app/register.tsx` | One-time player registration form |
-| History | `app/history.tsx` | Past games list |
+| Screen   | File               | Description                                     |
+| -------- | ------------------ | ----------------------------------------------- |
+| Home     | `app/index.tsx`    | Court view, queue, controls, confirmation modal |
+| Register | `app/register.tsx` | One-time player registration form               |
+| History  | `app/history.tsx`  | Past games list                                 |
 
 #### Push Notification Flow
 
@@ -729,12 +792,12 @@ Built with React Native and Expo, using Expo Router for file-based navigation. S
 
 #### Differences from Web
 
-| Concern | Web | Mobile |
-|---|---|---|
-| Player persistence | `localStorage` | `AsyncStorage` |
-| Live updates | 5s polling | 5s polling |
-| Confirmation | Banner in page | Bottom-sheet modal |
-| Leave queue | Inline "Leave" button | Destructive alert dialog |
+| Concern            | Web                   | Mobile                   |
+| ------------------ | --------------------- | ------------------------ |
+| Player persistence | `localStorage`        | `AsyncStorage`           |
+| Live updates       | 5s polling            | 5s polling               |
+| Confirmation       | Banner in page        | Bottom-sheet modal       |
+| Leave queue        | Inline "Leave" button | Destructive alert dialog |
 
 ---
 
@@ -750,11 +813,16 @@ Browser
   every 5 s ──► GET /api/queue
 ```
 
-SSE (`GET /api/events`) is implemented in the backend and the `broadcast_update` helper still fires on state changes, but **no web client subscribes to it** because PythonAnywhere's WSGI adapter would block a worker thread per open connection indefinitely.
+SSE (`GET /api/events`) is implemented in the backend and the `broadcast_update`
+helper still fires on state changes, but **no web client subscribes to it**
+because PythonAnywhere's WSGI adapter would block a worker thread per open
+connection indefinitely.
 
 ### SSE Backend (Available, Unused by Web)
 
-The SSE infrastructure remains in `app/api/events.py` and `scheduler.broadcast_update()`. It can be re-enabled for clients that run against a proper ASGI server (uvicorn direct, not behind a2wsgi):
+The SSE infrastructure remains in `app/api/events.py` and
+`scheduler.broadcast_update()`. It can be re-enabled for clients that run
+against a proper ASGI server (uvicorn direct, not behind a2wsgi):
 
 ```
 State change
@@ -777,38 +845,39 @@ The mobile app also uses 5-second polling (no SSE).
 
 ## 10. Configuration
 
-All configuration is read from environment variables (or a `.env` file) via Pydantic `BaseSettings`.
+All configuration is read from environment variables (or a `.env` file) via
+Pydantic `BaseSettings`.
 
 **Backend (`.env`):**
 
-| Variable | Default | Description |
-|---|---|---|
-| `DATABASE_URL` | `sqlite:///./volleyball.db` | SQLAlchemy database connection string |
-| `MAX_PLAYERS` | `12` | Maximum players per game |
-| `CONFIRM_TIMEOUT_SECONDS` | `300` | Confirmation window in seconds (5 minutes) |
-| `OPERATOR_SECRET` | `change-me-in-production` | Secret key for operator-only endpoints |
-| `ALLOWED_ORIGINS` | `http://localhost:5173,...` | Comma-separated CORS allowed origins |
-| `STUB_SMS` | `true` | If true, log SMS messages instead of sending via Twilio |
-| `STUB_PUSH` | `true` | If true, log push notifications instead of sending via Expo |
-| `STUB_EMAIL` | `true` | If true, skip email sending (auto-verify makes this safe) |
-| `TWILIO_ACCOUNT_SID` | *(empty)* | Twilio account SID (required when `STUB_SMS=false`) |
-| `TWILIO_AUTH_TOKEN` | *(empty)* | Twilio auth token |
-| `TWILIO_FROM_NUMBER` | *(empty)* | Twilio sender phone number (E.164 format) |
-| `RESEND_API_KEY` | *(empty)* | Resend API key (required when `STUB_EMAIL=false`) |
-| `EMAIL_FROM` | *(empty)* | Sender email address for Resend |
-| `BASE_URL` | `http://localhost:8000` | Public-facing URL embedded in SMS messages |
+| Variable                  | Default                     | Description                                                 |
+| ------------------------- | --------------------------- | ----------------------------------------------------------- |
+| `DATABASE_URL`            | `sqlite:///./volleyball.db` | SQLAlchemy database connection string                       |
+| `MAX_PLAYERS`             | `12`                        | Maximum players per game                                    |
+| `CONFIRM_TIMEOUT_SECONDS` | `300`                       | Confirmation window in seconds (5 minutes)                  |
+| `OPERATOR_SECRET`         | `change-me-in-production`   | Secret key for operator-only endpoints                      |
+| `ALLOWED_ORIGINS`         | `http://localhost:5173,...` | Comma-separated CORS allowed origins                        |
+| `STUB_SMS`                | `true`                      | If true, log SMS messages instead of sending via Twilio     |
+| `STUB_PUSH`               | `true`                      | If true, log push notifications instead of sending via Expo |
+| `STUB_EMAIL`              | `true`                      | If true, skip email sending (auto-verify makes this safe)   |
+| `TWILIO_ACCOUNT_SID`      | _(empty)_                   | Twilio account SID (required when `STUB_SMS=false`)         |
+| `TWILIO_AUTH_TOKEN`       | _(empty)_                   | Twilio auth token                                           |
+| `TWILIO_FROM_NUMBER`      | _(empty)_                   | Twilio sender phone number (E.164 format)                   |
+| `RESEND_API_KEY`          | _(empty)_                   | Resend API key (required when `STUB_EMAIL=false`)           |
+| `EMAIL_FROM`              | _(empty)_                   | Sender email address for Resend                             |
+| `BASE_URL`                | `http://localhost:8000`     | Public-facing URL embedded in SMS messages                  |
 
 **Web frontend (`.env` / Vercel env vars):**
 
-| Variable | Default | Description |
-|---|---|---|
-| `VITE_API_URL` | *(empty — same origin)* | Backend base URL (set to PythonAnywhere URL in production) |
-| `VITE_OPERATOR_SECRET` | `change-me-in-production` | Operator secret for the web operator controls |
+| Variable               | Default                   | Description                                                |
+| ---------------------- | ------------------------- | ---------------------------------------------------------- |
+| `VITE_API_URL`         | _(empty — same origin)_   | Backend base URL (set to PythonAnywhere URL in production) |
+| `VITE_OPERATOR_SECRET` | `change-me-in-production` | Operator secret for the web operator controls              |
 
 **Mobile frontend:**
 
-| Variable | Default | Description |
-|---|---|---|
+| Variable              | Default                 | Description                             |
+| --------------------- | ----------------------- | --------------------------------------- |
 | `EXPO_PUBLIC_API_URL` | `http://localhost:8000` | Backend base URL used by the mobile app |
 
 ---
@@ -817,34 +886,37 @@ All configuration is read from environment variables (or a `.env` file) via Pyda
 
 ### 11.1 Test Scope
 
-The test suite (`backend/tests/test_scenarios.py`) contains **91 unit tests** that cover every rule in the specification. Tests run against an in-memory SQLite database with no network calls (notification services are stubbed) and timeouts triggered manually.
+The test suite (`backend/tests/test_scenarios.py`) contains **91 unit tests**
+that cover every rule in the specification. Tests run against an in-memory
+SQLite database with no network calls (notification services are stubbed) and
+timeouts triggered manually.
 
 ### 11.2 Test Structure
 
 Each test class maps to one specification rule:
 
-| Class | Requirement | Tests |
-|---|---|---|
-| `TestScenario1_MaxTwelvePlayers` | R1 — max 12 players | 2 |
-| `TestScenario2_SignupNumbers` | R2 — first-come-first-served numbers | 3 |
-| `TestScenario3_MoreThan12Players` | R3 — first 12 play, rest wait | 3 |
-| `TestScenario4_NewArrivalsJoinWaitingList` | R4 — late arrivals join queue | 2 |
-| `TestScenario5_GameRotation` | R5 — court rotation after game | 3 |
-| `TestScenario6_AtMost12Players` | R6 — everyone plays if ≤12 | 6 |
-| `TestScenario7_LeaveWaitingList` | R7 — leave queue at any time | 5 |
-| `TestScenario8_ConfigurableTimeout` | R8 — 5-min configurable timeout | 5 |
-| `TestScenario9_ConfirmYes` | R9 — yes marks as playing | 3 |
-| `TestScenario10_ConfirmNo` | R10 — no → end of queue | 5 |
-| `TestScenario11_ConfirmDefer` | R11 — defer swaps player to position of first eligible; preserves signup number | 6 |
-| `TestScenario12_ValidResponses` | R12 — case-insensitive responses | 11 |
-| `TestScenario13_DisplayNames` | R13 — display name format (`FirstName L`, brackets) | 5 |
-| `TestScenario14_SignupNumbersVisible` | R14 — signup numbers shown | 3 |
-| `TestScenario15_LeaveGameMidPlay` | R7a — leave active game, removed from queue | 5 |
-| `TestScenario16_ResetAll` | R7b — Start Over preserves history | 5 |
-| `TestScenario17_Deregister` | Registration spec — deregister rules | 4 |
-| `TestScenario18_ClearHistory` | Clear History resets game ID sequence | 4 |
-| `TestScenario19_QueueDefer` | R7 — waiting list defer (swap with next) | 4 |
-| `TestEdgeCases` | Edge cases | 5 |
+| Class                                      | Requirement                                                                     | Tests |
+| ------------------------------------------ | ------------------------------------------------------------------------------- | ----- |
+| `TestScenario1_MaxTwelvePlayers`           | R1 — max 12 players                                                             | 2     |
+| `TestScenario2_SignupNumbers`              | R2 — first-come-first-served numbers                                            | 3     |
+| `TestScenario3_MoreThan12Players`          | R3 — first 12 play, rest wait                                                   | 3     |
+| `TestScenario4_NewArrivalsJoinWaitingList` | R4 — late arrivals join queue                                                   | 2     |
+| `TestScenario5_GameRotation`               | R5 — court rotation after game                                                  | 3     |
+| `TestScenario6_AtMost12Players`            | R6 — everyone plays if ≤12                                                      | 6     |
+| `TestScenario7_LeaveWaitingList`           | R7 — leave queue at any time                                                    | 5     |
+| `TestScenario8_ConfigurableTimeout`        | R8 — 5-min configurable timeout                                                 | 5     |
+| `TestScenario9_ConfirmYes`                 | R9 — yes marks as playing                                                       | 3     |
+| `TestScenario10_ConfirmNo`                 | R10 — no → end of queue                                                         | 5     |
+| `TestScenario11_ConfirmDefer`              | R11 — defer swaps player to position of first eligible; preserves signup number | 6     |
+| `TestScenario12_ValidResponses`            | R12 — case-insensitive responses                                                | 11    |
+| `TestScenario13_DisplayNames`              | R13 — display name format (`FirstName L`, brackets)                             | 5     |
+| `TestScenario14_SignupNumbersVisible`      | R14 — signup numbers shown                                                      | 3     |
+| `TestScenario15_LeaveGameMidPlay`          | R7a — leave active game, removed from queue                                     | 5     |
+| `TestScenario16_ResetAll`                  | R7b — Start Over preserves history                                              | 5     |
+| `TestScenario17_Deregister`                | Registration spec — deregister rules                                            | 4     |
+| `TestScenario18_ClearHistory`              | Clear History resets game ID sequence                                           | 4     |
+| `TestScenario19_QueueDefer`                | R7 — waiting list defer (swap with next)                                        | 4     |
+| `TestEdgeCases`                            | Edge cases                                                                      | 5     |
 
 ### 11.3 Running Tests
 
@@ -856,13 +928,26 @@ pytest tests/test_scenarios.py -v
 
 ### 11.4 Key Test Design Decisions
 
-**In-memory database per test.** Each test receives a fresh SQLite in-memory database via the `db` fixture. This gives perfect isolation without file I/O overhead.
+**In-memory database per test.** Each test receives a fresh SQLite in-memory
+database via the `db` fixture. This gives perfect isolation without file I/O
+overhead.
 
-**Manual timeout triggering.** Since tests should not fire real `threading.Timer` callbacks, the `db` fixture calls `scheduler._timeout_tasks.clear()` before each test. Tests that verify timeout behaviour call `scheduler.handle_timeout()` directly, bypassing the timer entirely.
+**Manual timeout triggering.** Since tests should not fire real
+`threading.Timer` callbacks, the `db` fixture calls
+`scheduler._timeout_tasks.clear()` before each test. Tests that verify timeout
+behaviour call `scheduler.handle_timeout()` directly, bypassing the timer
+entirely.
 
-**Chain-of-declines edge case.** When all backup players decline, the game starts with only the confirmed players. The test verifies this by triggering a third decline when only one backup player exists, causing the queue to be exhausted and the game to start with one confirmed player.
+**Chain-of-declines edge case.** When all backup players decline, the game
+starts with only the confirmed players. The test verifies this by triggering a
+third decline when only one backup player exists, causing the queue to be
+exhausted and the game to start with one confirmed player.
 
-**All-timeout batch fill.** When every notified player times out (confirmed = 0) but the queue has remaining players, `_try_fill_open_slots` must still run. The `confirmed == 0` early-return guard was removed to ensure queue players always get their chance to confirm — the game only remains in OPEN state (never starts) if both confirmed = 0 and the queue is empty.
+**All-timeout batch fill.** When every notified player times out (confirmed = 0)
+but the queue has remaining players, `_try_fill_open_slots` must still run. The
+`confirmed == 0` early-return guard was removed to ensure queue players always
+get their chance to confirm — the game only remains in OPEN state (never starts)
+if both confirmed = 0 and the queue is empty.
 
 ---
 
@@ -870,11 +955,17 @@ pytest tests/test_scenarios.py -v
 
 ### 12.1 Backend (PythonAnywhere)
 
-The production backend runs on **PythonAnywhere free tier** (WSGI only, no long-running async).
+The production backend runs on **PythonAnywhere free tier** (WSGI only, no
+long-running async).
 
 Key files:
-- `backend/wsgi.py` — PythonAnywhere WSGI entry. Uses a lazy singleton pattern to initialise `a2wsgi.ASGIMiddleware` inside the first request, after uWSGI has forked worker processes. This avoids the background-thread-doesn't-survive-fork hang.
-- `backend/app/main.py` — Calls `init_db()` at module import time (not in an asyncio lifespan hook).
+
+- `backend/wsgi.py` — PythonAnywhere WSGI entry. Uses a lazy singleton pattern
+  to initialise `a2wsgi.ASGIMiddleware` inside the first request, after uWSGI
+  has forked worker processes. This avoids the
+  background-thread-doesn't-survive-fork hang.
+- `backend/app/main.py` — Calls `init_db()` at module import time (not in an
+  asyncio lifespan hook).
 
 ```python
 # wsgi.py — lazy init pattern
@@ -890,13 +981,16 @@ def application(environ, start_response):
 ```
 
 **PythonAnywhere Web tab settings:**
+
 - Source code: `/home/<user>/volleyball_scheduler/backend`
 - Virtualenv: `/home/<user>/venv`
 - WSGI file: points to `wsgi.py`
 
-After code changes: `git pull` in the backend directory, then reload the web app via the PythonAnywhere Web tab.
+After code changes: `git pull` in the backend directory, then reload the web app
+via the PythonAnywhere Web tab.
 
 **Local development:**
+
 ```bash
 cd backend
 pip install -r requirements.txt
@@ -913,10 +1007,14 @@ The production frontend is deployed to **Vercel**:
 - `vercel.json` contains SPA rewrite rules
 
 **Required Vercel environment variables:**
-- `VITE_API_URL` — PythonAnywhere backend URL (e.g. `https://allisonzai.pythonanywhere.com`)
-- `VITE_OPERATOR_SECRET` — operator secret (must match backend `OPERATOR_SECRET`)
+
+- `VITE_API_URL` — PythonAnywhere backend URL (e.g.
+  `https://allisonzai.pythonanywhere.com`)
+- `VITE_OPERATOR_SECRET` — operator secret (must match backend
+  `OPERATOR_SECRET`)
 
 **Local development:**
+
 ```bash
 cd web
 npm install
@@ -926,6 +1024,7 @@ npm run dev   # Vite dev server on :5173
 ### 12.3 Mobile App
 
 For development:
+
 ```bash
 cd mobile
 npm install
@@ -933,19 +1032,26 @@ EXPO_PUBLIC_API_URL=http://<YOUR_LAN_IP>:8000 npx expo start
 ```
 
 For production, build with EAS Build:
+
 ```bash
 npx eas build --platform all
 ```
 
-Live game updates on mobile use 5-second polling. If lower latency is needed, add SSE support via `react-native-sse` or WebSockets.
+Live game updates on mobile use 5-second polling. If lower latency is needed,
+add SSE support via `react-native-sse` or WebSockets.
 
 ### 12.4 SMS (Twilio)
 
 1. Create a Twilio account and purchase a phone number.
 2. Set `STUB_SMS=false` and fill in the Twilio credentials in `.env`.
-3. Configure the Twilio number's inbound webhook URL to `https://<BASE_URL>/api/sms/webhook`.
-4. Ensure `BASE_URL` in `.env` matches the public hostname so reply links in SMS messages resolve correctly.
+3. Configure the Twilio number's inbound webhook URL to
+   `https://<BASE_URL>/api/sms/webhook`.
+4. Ensure `BASE_URL` in `.env` matches the public hostname so reply links in SMS
+   messages resolve correctly.
 
 ### 12.5 Push Notifications (Expo)
 
-Push notifications work automatically via the Expo Push API when `STUB_PUSH=false`. No server-side credentials are required for the Expo service. For Firebase Cloud Messaging (Android) or APNs (iOS) direct delivery, configure the keys in the Expo EAS dashboard and rebuild the app.
+Push notifications work automatically via the Expo Push API when
+`STUB_PUSH=false`. No server-side credentials are required for the Expo service.
+For Firebase Cloud Messaging (Android) or APNs (iOS) direct delivery, configure
+the keys in the Expo EAS dashboard and rebuild the app.

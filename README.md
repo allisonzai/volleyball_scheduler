@@ -1,19 +1,27 @@
 # Volleyball Scheduler
 
-A full-stack volleyball game scheduling system with a Python/FastAPI backend, React web frontend, and React Native mobile app (iOS + Android).
+A full-stack volleyball game scheduling system with a Python/FastAPI backend,
+React web frontend, and React Native mobile app (iOS + Android).
 
 ## Features
 
 - Player registration (name, phone, email, password) with instant sign-in
-- First-come-first-served signup queue with per-session signup numbers (reset to 1 after Start Over); numbers persist on game slots for history display
+- First-come-first-served signup queue with per-session signup numbers (reset to
+  1 after Start Over); numbers persist on game slots for history display
 - Auto-scheduling: first 12 players are notified; game starts on confirmation
 - **yes** — player confirmed, takes their spot
-- **no** — player removed from game and queue entirely; first eligible player (not already deferred) notified
-- **defer** — swaps with the first eligible player in the queue (not already deferred); deferred player is re-inserted before the next non-deferred queue entry, keeping their original signup number
-- Configurable 5-minute confirmation timeout (no response = no; player removed from queue)
-- Players can leave the waiting list, or defer to swap with the next person behind them
+- **no** — player removed from game and queue entirely; first eligible player
+  (not already deferred) notified
+- **defer** — swaps with the first eligible player in the queue (not already
+  deferred); deferred player is re-inserted before the next non-deferred queue
+  entry, keeping their original signup number
+- Configurable 5-minute confirmation timeout (no response = no; player removed
+  from queue)
+- Players can leave the waiting list, or defer to swap with the next person
+  behind them
 - Confirmed players can leave an active game (removed from queue entirely)
-- Display names: `FirstName L` — disambiguated with last 4 phone digits in brackets if duplicate (e.g. `Alice J [4242]`)
+- Display names: `FirstName L` — disambiguated with last 4 phone digits in
+  brackets if duplicate (e.g. `Alice J [4242]`)
 - SMS notifications via Twilio (stub mode by default)
 - Push notifications via Expo (stub mode by default)
 - 5-second polling for live updates
@@ -24,10 +32,10 @@ A full-stack volleyball game scheduling system with a Python/FastAPI backend, Re
 
 ## Production Deployment
 
-| Component | Platform |
-|---|---|
-| Backend | PythonAnywhere (free tier, WSGI via a2wsgi) |
-| Web frontend | Vercel |
+| Component    | Platform                                    |
+| ------------ | ------------------------------------------- |
+| Backend      | PythonAnywhere (free tier, WSGI via a2wsgi) |
+| Web frontend | Vercel                                      |
 
 ### PythonAnywhere (backend)
 
@@ -38,7 +46,8 @@ A full-stack volleyball game scheduling system with a Python/FastAPI backend, Re
    source ~/venv/bin/activate
    pip install -r backend/requirements.txt
    ```
-3. In the **Web** tab: set the WSGI file to `backend/wsgi.py`, set the virtualenv path.
+3. In the **Web** tab: set the WSGI file to `backend/wsgi.py`, set the
+   virtualenv path.
 4. Create `backend/.env` from the table below.
 5. Click **Reload**.
 
@@ -86,78 +95,85 @@ EXPO_PUBLIC_API_URL=http://192.168.1.100:8000 npx expo start
 
 ### Backend (`backend/.env`)
 
-| Variable | Default | Description |
-|---|---|---|
-| `DATABASE_URL` | `sqlite:///./volleyball.db` | SQLAlchemy connection string |
-| `MAX_PLAYERS` | `12` | Max players per game |
-| `CONFIRM_TIMEOUT_SECONDS` | `300` | Seconds to confirm (5 min) |
-| `OPERATOR_SECRET` | `change-me-in-production` | Protects start/end/reset endpoints |
-| `ALLOWED_ORIGINS` | `http://localhost:5173,...` | CORS allowed origins |
-| `STUB_SMS` | `true` | Log SMS instead of sending |
-| `STUB_PUSH` | `true` | Log push instead of sending |
-| `STUB_EMAIL` | `true` | Log email instead of sending |
-| `TWILIO_ACCOUNT_SID` | — | Twilio credentials (when `STUB_SMS=false`) |
-| `TWILIO_AUTH_TOKEN` | — | Twilio credentials |
-| `TWILIO_FROM_NUMBER` | — | Your Twilio phone number |
-| `RESEND_API_KEY` | — | Resend API key (when `STUB_EMAIL=false`) |
-| `BASE_URL` | `http://localhost:8000` | Public URL (for SMS links) |
+| Variable                  | Default                     | Description                                |
+| ------------------------- | --------------------------- | ------------------------------------------ |
+| `DATABASE_URL`            | `sqlite:///./volleyball.db` | SQLAlchemy connection string               |
+| `MAX_PLAYERS`             | `12`                        | Max players per game                       |
+| `CONFIRM_TIMEOUT_SECONDS` | `300`                       | Seconds to confirm (5 min)                 |
+| `OPERATOR_SECRET`         | `change-me-in-production`   | Protects start/end/reset endpoints         |
+| `ALLOWED_ORIGINS`         | `http://localhost:5173,...` | CORS allowed origins                       |
+| `STUB_SMS`                | `true`                      | Log SMS instead of sending                 |
+| `STUB_PUSH`               | `true`                      | Log push instead of sending                |
+| `STUB_EMAIL`              | `true`                      | Log email instead of sending               |
+| `TWILIO_ACCOUNT_SID`      | —                           | Twilio credentials (when `STUB_SMS=false`) |
+| `TWILIO_AUTH_TOKEN`       | —                           | Twilio credentials                         |
+| `TWILIO_FROM_NUMBER`      | —                           | Your Twilio phone number                   |
+| `RESEND_API_KEY`          | —                           | Resend API key (when `STUB_EMAIL=false`)   |
+| `BASE_URL`                | `http://localhost:8000`     | Public URL (for SMS links)                 |
 
 ### Web frontend (Vercel env vars or `web/.env`)
 
-| Variable | Description |
-|---|---|
-| `VITE_API_URL` | Backend base URL (e.g. `https://yourname.pythonanywhere.com`) |
-| `VITE_OPERATOR_SECRET` | Must match backend `OPERATOR_SECRET` |
+| Variable               | Description                                                   |
+| ---------------------- | ------------------------------------------------------------- |
+| `VITE_API_URL`         | Backend base URL (e.g. `https://yourname.pythonanywhere.com`) |
+| `VITE_OPERATOR_SECRET` | Must match backend `OPERATOR_SECRET`                          |
 
 ---
 
 ## API Overview
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| POST | `/api/players` | — | Register a player |
-| POST | `/api/players/signin` | — | Sign in (phone + password) |
-| GET | `/api/players/{id}` | — | Get player profile |
-| DELETE | `/api/players/{id}` | Player token | Deregister (blocked if in active game) |
-| PATCH | `/api/players/{id}/push-token` | — | Update Expo push token |
-| GET | `/api/queue` | — | Get waiting list (ordered) |
-| POST | `/api/queue/join` | Player token | Join the waiting list |
-| DELETE | `/api/queue/{player_id}` | Player token | Leave the waiting list |
-| POST | `/api/queue/{player_id}/defer` | Player token | Swap with the next person in the waiting list |
-| GET | `/api/games/current` | — | Current active game |
-| GET | `/api/games` | — | List all games |
-| POST | `/api/games/start` | Operator secret | Start a new game |
-| POST | `/api/games/{id}/end` | Operator secret | End a game |
-| POST | `/api/games/{id}/leave` | Player token | Leave an active game mid-play |
-| POST | `/api/games/reset` | Operator secret | Start Over (cancel game, clear queue) |
-| DELETE | `/api/games/history` | Operator secret | Delete all finished game records |
-| POST | `/api/confirm` | Player token | Submit yes/no/defer |
-| POST | `/api/sms/webhook` | Twilio signature | Inbound SMS webhook |
+| Method | Path                           | Auth             | Description                                   |
+| ------ | ------------------------------ | ---------------- | --------------------------------------------- |
+| POST   | `/api/players`                 | —                | Register a player                             |
+| POST   | `/api/players/signin`          | —                | Sign in (phone + password)                    |
+| GET    | `/api/players/{id}`            | —                | Get player profile                            |
+| DELETE | `/api/players/{id}`            | Player token     | Deregister (blocked if in active game)        |
+| PATCH  | `/api/players/{id}/push-token` | —                | Update Expo push token                        |
+| GET    | `/api/queue`                   | —                | Get waiting list (ordered)                    |
+| POST   | `/api/queue/join`              | Player token     | Join the waiting list                         |
+| DELETE | `/api/queue/{player_id}`       | Player token     | Leave the waiting list                        |
+| POST   | `/api/queue/{player_id}/defer` | Player token     | Swap with the next person in the waiting list |
+| GET    | `/api/games/current`           | —                | Current active game                           |
+| GET    | `/api/games`                   | —                | List all games                                |
+| POST   | `/api/games/start`             | Operator secret  | Start a new game                              |
+| POST   | `/api/games/{id}/end`          | Operator secret  | End a game                                    |
+| POST   | `/api/games/{id}/leave`        | Player token     | Leave an active game mid-play                 |
+| POST   | `/api/games/reset`             | Operator secret  | Start Over (cancel game, clear queue)         |
+| DELETE | `/api/games/history`           | Operator secret  | Delete all finished game records              |
+| POST   | `/api/confirm`                 | Player token     | Submit yes/no/defer                           |
+| POST   | `/api/sms/webhook`             | Twilio signature | Inbound SMS webhook                           |
 
 ---
 
 ## Scheduling Logic
 
-1. Players join the waiting list (assigned a signup number; resets to 1 after Start Over).
+1. Players join the waiting list (assigned a signup number; resets to 1 after
+   Start Over).
 2. Operator clicks **Start New Game**.
-3. First 12 players are notified via SMS + push; their signup number is saved on their game slot.
+3. First 12 players are notified via SMS + push; their signup number is saved on
+   their game slot.
 4. Each player has 5 minutes to respond (configurable):
    - **yes** → confirmed, keeps their spot
-   - **no** → removed from queue entirely; first eligible player (not already deferred) notified
-   - **defer** → first eligible player fills the slot; deferred player re-inserted before next non-deferred queue entry, original signup number preserved
-   - *(no response)* → treated as **no**: removed from queue entirely
-5. Once all pending slots resolve, missing spots are batch-filled from the queue (even if none confirmed yet). Game starts when at least one player confirms and the queue is exhausted.
+   - **no** → removed from queue entirely; first eligible player (not already
+     deferred) notified
+   - **defer** → first eligible player fills the slot; deferred player
+     re-inserted before next non-deferred queue entry, original signup number
+     preserved
+   - _(no response)_ → treated as **no**: removed from queue entirely
+5. Once all pending slots resolve, missing spots are batch-filled from the queue
+   (even if none confirmed yet). Game starts when at least one player confirms
+   and the queue is exhausted.
 6. When the game ends, confirmed court players rotate to the end of the queue.
 7. Operator clicks **Start New Game** to begin the next round.
 
 ### Operator Controls
 
-| Button | Effect |
-|---|---|
-| Start New Game | Creates next game from the queue |
-| End Game #N | Marks game finished; rotates court players to queue |
-| Start Over | Cancels active game, clears queue; history preserved |
-| Clear History | Deletes all finished game records (in Past Games tab) |
+| Button         | Effect                                                |
+| -------------- | ----------------------------------------------------- |
+| Start New Game | Creates next game from the queue                      |
+| End Game #N    | Marks game finished; rotates court players to queue   |
+| Start Over     | Cancels active game, clears queue; history preserved  |
+| Clear History  | Deletes all finished game records (in Past Games tab) |
 
 ---
 
