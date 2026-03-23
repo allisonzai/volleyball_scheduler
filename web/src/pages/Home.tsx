@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { useGameState } from "../hooks/useGameState";
 import { usePlayer } from "../hooks/usePlayer";
 import CourtView from "../components/CourtView";
@@ -16,6 +17,8 @@ export default function Home() {
   const { game, queue, loading, refresh } = useGameState();
   const [tab, setTab] = useState<Tab>("live");
   const [showRegister, setShowRegister] = useState(!player);
+  const [showQR, setShowQR] = useState(false);
+  const pageUrl = window.location.href;
 
   const pendingSlot = player && game
     ? game.slots.find(
@@ -88,6 +91,18 @@ export default function Home() {
           <div className="flex items-center gap-2">
             <span className="text-2xl">🏐</span>
             <h1 className="font-bold text-gray-800 text-lg">Volleyball Scheduler</h1>
+            <button
+              onClick={() => setShowQR((v) => !v)}
+              title="Share QR code"
+              className="ml-1 text-gray-400 hover:text-blue-500 transition"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="3" height="3" />
+                <rect x="19" y="14" width="2" height="2" /><rect x="14" y="19" width="2" height="2" />
+                <rect x="18" y="18" width="3" height="3" />
+              </svg>
+            </button>
           </div>
           {player ? (
             <div className="flex items-center gap-2">
@@ -115,6 +130,16 @@ export default function Home() {
           )}
         </div>
       </header>
+
+      {showQR && (
+        <div className="bg-white border-b border-gray-100 shadow-sm">
+          <div className="max-w-2xl mx-auto px-4 py-4 flex flex-col items-center gap-2">
+            <p className="text-sm text-gray-500">Scan to join on your phone</p>
+            <QRCodeSVG value={pageUrl} size={180} />
+            <p className="text-xs text-gray-400 break-all">{pageUrl}</p>
+          </div>
+        </div>
+      )}
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-4">
         {/* Registration panel */}
