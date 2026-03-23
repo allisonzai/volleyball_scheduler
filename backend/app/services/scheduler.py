@@ -441,6 +441,27 @@ def leave_queue(player_id: int, db: Session) -> None:
     broadcast_update("queue_update")
 
 
+def defer_in_queue(player_id: int, db: Session) -> WaitingList:
+    """Swap this waiting-list player with the next person behind them."""
+    entry = db.query(WaitingList).filter(WaitingList.player_id == player_id).first()
+    if not entry:
+        raise LookupError("Player is not in the queue.")
+
+    next_entry = (
+        db.query(WaitingList)
+        .filter(WaitingList.position > entry.position)
+        .order_by(WaitingList.position)
+        .first()
+    )
+    if not next_entry:
+        raise ValueError("No next player to swap with — already last in queue.")
+
+    entry.position, next_entry.position = next_entry.position, entry.position
+    db.flush()
+    broadcast_update("queue_update")
+    return entry
+
+
 def leave_game(player_id: int, game_id: int, db: Session) -> None:
     """Allow a confirmed player to leave an active game mid-play."""
     slot = (

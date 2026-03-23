@@ -42,6 +42,8 @@ export const joinQueue = (player_id: number, secret_token: string) =>
   api.post("/queue/join", { player_id }, { headers: { "X-Player-Token": secret_token } }).then((r) => r.data);
 export const leaveQueue = (player_id: number, secret_token: string) =>
   api.delete(`/queue/${player_id}`, { headers: { "X-Player-Token": secret_token } }).then((r) => r.data);
+export const deferQueue = (player_id: number, secret_token: string) =>
+  api.post(`/queue/${player_id}/defer`, null, { headers: { "X-Player-Token": secret_token } }).then((r) => r.data);
 
 // Games
 export const getCurrentGame = () =>

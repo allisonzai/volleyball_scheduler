@@ -1,6 +1,6 @@
 import type { QueueEntry, Player } from "../types";
 import PlayerBadge from "./PlayerBadge";
-import { leaveQueue } from "../api/client";
+import { leaveQueue, deferQueue } from "../api/client";
 
 interface Props {
   queue: QueueEntry[];
@@ -18,6 +18,16 @@ export default function WaitingListView({ queue, currentPlayerId, currentPlayer,
       onRefresh();
     } catch {
       alert("Failed to leave queue.");
+    }
+  };
+
+  const handleDefer = async (playerId: number) => {
+    if (!currentPlayer) return;
+    try {
+      await deferQueue(playerId, currentPlayer.secret_token);
+      onRefresh();
+    } catch {
+      alert("Already last in the queue.");
     }
   };
 
@@ -42,12 +52,20 @@ export default function WaitingListView({ queue, currentPlayerId, currentPlayer,
                 />
               </div>
               {entry.player_id === currentPlayerId && (
-                <button
-                  onClick={() => handleLeave(entry.player_id)}
-                  className="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded border border-red-200 hover:border-red-400 transition"
-                >
-                  Leave
-                </button>
+                <>
+                  <button
+                    onClick={() => handleDefer(entry.player_id)}
+                    className="text-xs text-yellow-500 hover:text-yellow-700 px-2 py-1 rounded border border-yellow-200 hover:border-yellow-400 transition"
+                  >
+                    Defer
+                  </button>
+                  <button
+                    onClick={() => handleLeave(entry.player_id)}
+                    className="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded border border-red-200 hover:border-red-400 transition"
+                  >
+                    Leave
+                  </button>
+                </>
               )}
             </div>
           ))}

@@ -95,3 +95,27 @@ def leave_queue(
         raise HTTPException(404, "Player is not in the queue.")
     scheduler.leave_queue(player_id, db)
     db.commit()
+
+
+@router.post("/{player_id}/defer", response_model=QueueEntry)
+def defer_in_queue(
+    player_id: int,
+    x_player_token: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    player = db.query(Player).filter(Player.id == player_id).first()
+    if not player:
+        raise HTTPException(404, "Player not found.")
+
+    _require_player_token(player, x_player_token)
+
+    try:
+        entry = scheduler.defer_in_queue(player_id, db)
+    except LookupError as e:
+        raise HTTPException(404, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    db.commit()
+    db.refresh(entry)
+    return _entry_to_schema(entry)

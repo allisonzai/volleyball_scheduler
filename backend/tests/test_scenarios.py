@@ -1276,3 +1276,56 @@ class TestScenario18_ClearHistory:
         from app.models.player import Player as PlayerModel
         for p in players:
             assert db.query(PlayerModel).filter(PlayerModel.id == p.id).first() is not None
+
+
+# ── SCENARIO 19 ──────────────────────────────────────────────────────────────
+# "The player in the waiting list can choose 'Defer' to swap with the next
+#  person in the waiting list."
+
+class TestScenario19_QueueDefer:
+    def test_defer_swaps_with_next_player(self, db):
+        """Player at position 1 defers — they move to position 2, next moves to 1."""
+        p1 = register_and_queue(db, 1)
+        p2 = register_and_queue(db, 2)
+        p3 = register_and_queue(db, 3)
+
+        scheduler.defer_in_queue(p1.id, db)
+        db.commit()
+
+        queue = scheduler.get_queue(db)
+        ids = [e.player_id for e in queue]
+        assert ids[0] == p2.id, "p2 should now be first"
+        assert ids[1] == p1.id, "p1 should be second after deferring"
+        assert ids[2] == p3.id, "p3 stays third"
+
+    def test_defer_last_player_raises(self, db):
+        """A player who is last in the queue cannot defer."""
+        p1 = register_and_queue(db, 1)
+        register_and_queue(db, 2)
+
+        queue = scheduler.get_queue(db)
+        last_id = queue[-1].player_id
+
+        with pytest.raises(ValueError):
+            scheduler.defer_in_queue(last_id, db)
+
+    def test_defer_not_in_queue_raises(self, db):
+        p = make_player(db, 1)
+        db.commit()
+
+        with pytest.raises(LookupError):
+            scheduler.defer_in_queue(p.id, db)
+
+    def test_defer_middle_player(self, db):
+        """Player in the middle defers — only they and the player behind them swap."""
+        p1 = register_and_queue(db, 1)
+        p2 = register_and_queue(db, 2)
+        p3 = register_and_queue(db, 3)
+        p4 = register_and_queue(db, 4)
+
+        scheduler.defer_in_queue(p2.id, db)
+        db.commit()
+
+        queue = scheduler.get_queue(db)
+        ids = [e.player_id for e in queue]
+        assert ids == [p1.id, p3.id, p2.id, p4.id], f"Expected p1,p3,p2,p4 but got {ids}"
