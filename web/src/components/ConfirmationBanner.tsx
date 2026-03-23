@@ -1,11 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { confirm } from "../api/client";
 import type { Game, Slot } from "../types";
 
 function useCountdown(notifiedAt: string | null, timeoutSeconds: number): number {
+  // Fall back to component mount time when server timestamp is unavailable
+  const mountedAt = useRef(Date.now());
+
   const getSecondsLeft = () => {
-    if (!notifiedAt) return timeoutSeconds;
-    const elapsed = Math.floor((Date.now() - new Date(notifiedAt + "Z").getTime()) / 1000);
+    const start = notifiedAt
+      ? new Date(notifiedAt + "Z").getTime()
+      : mountedAt.current;
+    const elapsed = Math.floor((Date.now() - start) / 1000);
     return Math.max(0, timeoutSeconds - elapsed);
   };
 
@@ -16,7 +21,6 @@ function useCountdown(notifiedAt: string | null, timeoutSeconds: number): number
   }, [notifiedAt, timeoutSeconds]);
 
   useEffect(() => {
-    if (secondsLeft <= 0) return;
     const id = setInterval(() => setSecondsLeft(getSecondsLeft()), 1000);
     return () => clearInterval(id);
   }, [notifiedAt, timeoutSeconds]);
