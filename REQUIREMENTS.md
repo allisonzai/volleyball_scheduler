@@ -151,6 +151,10 @@ Once selected for a game, each player:
 - This applies even if `confirmed == 0` at that point — queue players deserve
   their chance. The game starts once at least one of the new batch confirms and
   the queue is exhausted.
+- **Deferred players are eligible for batch fill.** During batch fill, only
+  players with an active (PENDING or CONFIRMED) slot are excluded. A player who
+  deferred earlier (DECLINED slot, re-inserted into queue) is treated as a
+  regular queue entry and may be drawn to fill a vacant spot.
 - Each replacement player receives their own fresh notification and a full new
   confirmation window.
 - If the queue is exhausted before all slots are filled:
@@ -317,4 +321,4 @@ testing.
 | **Database**            | SQLite (file-based); no migration framework — schema changes applied via `ALTER TABLE`.                                          |
 | **Confirmation timers** | Implemented with `threading.Timer` (daemon threads) for WSGI compatibility. Timers do not survive server restart.                |
 | **Scalability**         | Single-server; designed for a small recreational group (tens of players).                                                        |
-| **Test coverage**       | 91 scenario-driven unit tests covering all specification rules; all must pass before merging changes to the scheduler or models. |
+| **Test coverage**       | 92 scenario-driven unit tests covering all specification rules; all must pass before merging changes to the scheduler or models. |

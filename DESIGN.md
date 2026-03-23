@@ -141,7 +141,7 @@ volleyball_scheduler/
 │   │   │   ├── email.py          # Resend HTTP API adapter
 │   │   │   └── password.py       # PBKDF2-SHA256 hash/verify
 │   ├── tests/
-│   │   └── test_scenarios.py     # 64 scenario-driven unit tests
+│   │   └── test_scenarios.py     # 92 scenario-driven unit tests
 │   ├── requirements.txt
 │   └── .env.example
 │
@@ -246,14 +246,14 @@ volleyball_scheduler/
 
 ### 4.2 Key Invariants
 
-| Invariant                                               | Description                                                                                                                                          |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WaitingList.player_id` is UNIQUE                       | A player appears at most once in the queue at any time.                                                                                              |
-| `WaitingList.signup_number` is monotonically increasing | Assigned from a global counter; resets to 1 after Start Over (queue cleared).                                                                        |
-| `WaitingList.position` is compacted to `1..N`           | Resequenced after every mutation (join, leave, defer).                                                                                               |
-| `GameSlot.signup_number` is copied at slot creation     | Captured from the player's `WaitingList` entry before they are removed from the queue; persists for display in the game view and past games history. |
-| A player has at most one slot per game                  | `fill_slot` excludes players who have any slot (any status) in the current game.                                                                     |
-| `GameSlot.position` values are unique within a game     | Tracks physical court seat assignment.                                                                                                               |
+| Invariant                                               | Description                                                                                                                                                                                                  |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `WaitingList.player_id` is UNIQUE                       | A player appears at most once in the queue at any time.                                                                                                                                                      |
+| `WaitingList.signup_number` is monotonically increasing | Assigned from a global counter; resets to 1 after Start Over (queue cleared).                                                                                                                                |
+| `WaitingList.position` is compacted to `1..N`           | Resequenced after every mutation (join, leave, defer).                                                                                                                                                       |
+| `GameSlot.signup_number` is copied at slot creation     | Captured from the player's `WaitingList` entry before they are removed from the queue; persists for display in the game view and past games history.                                                         |
+| A player has at most one active slot per game           | During live confirmation `fill_slot` excludes all-status slots. During batch fill (`allow_requeue=True`) only PENDING/CONFIRMED slots are excluded, so deferred players in the queue may receive a new slot. |
+| `GameSlot.position` values are unique within a game     | Tracks physical court seat assignment.                                                                                                                                                                       |
 
 ### 4.3 Game Status Transitions
 
@@ -315,13 +315,26 @@ expire game (force SQLAlchemy to reload .slots relationship)
 return game
 ```
 
-### 5.2 Filling an Open Slot: `fill_slot(db, game)`
+### 5.2 Filling an Open Slot: `fill_slot(db, game, allow_requeue=False)`
 
-Called whenever a slot becomes vacant (no/defer/timeout).
+Called whenever a slot becomes vacant (no/defer/timeout/leave-mid-play).
+
+`allow_requeue` controls which existing slots count as "already taken":
+
+- `allow_requeue=False` (default — live confirmation phase): all statuses are
+  excluded. A player who deferred and was re-inserted into the queue is not
+  immediately re-drawn for the same game.
+- `allow_requeue=True` (batch fill after all pending resolve): only
+  PENDING_CONFIRMATION and CONFIRMED slots are excluded. A player who deferred
+  earlier (DECLINED slot, back in the queue) is eligible to fill a remaining
+  spot when the queue would otherwise be too small.
 
 ```
-already_slotted = {s.player_id for s in game.slots}
-    # includes ALL statuses — prevents a player getting two slots in one game
+if allow_requeue:
+    already_slotted = {s.player_id for s in game.slots
+                       WHERE s.status IN (PENDING_CONFIRMATION, CONFIRMED)}
+else:
+    already_slotted = {s.player_id for s in game.slots}   # all statuses
 
 next_player = first in queue WHERE player_id NOT IN already_slotted
 
@@ -340,10 +353,6 @@ schedule timeout
 expire game
 return True
 ```
-
-The `already_slotted` check is the key invariant that prevents a player from
-being drawn twice for the same game — even if they were declined, timed out, or
-deferred and placed back at the front of the queue.
 
 ### 5.3 Handling a Confirmation: `handle_confirmation(player_id, game_id, response, db)`
 
@@ -384,16 +393,21 @@ if needed <= 0:
 
 else:
     for _ in range(needed):
-        if not fill_slot(game):
+        if not fill_slot(game, allow_requeue=True):
             break               # queue exhausted; fill_slot starts game if confirmed > 0
 ```
 
-Key design: the `confirmed == 0` check was intentionally **removed**. If every
-player in the initial group times out (confirmed = 0), batch fill still runs so
-that queue players get their turn. Those new players will confirm or decline;
-the game starts once at least one of them confirms yes. If the queue is also
-empty and confirmed = 0, the game remains in OPEN state until the operator
-clicks Start Over.
+Key design notes:
+
+- The `confirmed == 0` early-return was intentionally **removed**. If every
+  player in the initial group times out, batch fill still runs so queue players
+  get their turn. The game starts once at least one of them confirms. If the
+  queue is also empty and confirmed = 0, the game remains OPEN until the
+  operator clicks Start Over.
+- `allow_requeue=True` is passed so deferred players re-inserted into the queue
+  are eligible during batch fill. Without this, a deferred player's DECLINED
+  slot would permanently block them even when they are the only person left in
+  the queue.
 
 ---
 
@@ -951,6 +965,13 @@ but the queue has remaining players, `_try_fill_open_slots` must still run. The
 `confirmed == 0` early-return guard was removed to ensure queue players always
 get their chance to confirm — the game only remains in OPEN state (never starts)
 if both confirmed = 0 and the queue is empty.
+
+**Deferred player eligible for batch fill.** `_try_fill_open_slots` calls
+`fill_slot(allow_requeue=True)` so that a player who deferred (DECLINED slot,
+re-inserted into queue) is not permanently blocked when the queue would
+otherwise be too small. During the live confirmation phase `fill_slot` is called
+with the default `allow_requeue=False`, preventing immediate re-draw of a player
+who just deferred.
 
 ---
 
