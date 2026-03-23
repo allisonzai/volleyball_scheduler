@@ -619,8 +619,7 @@ class TestScenario10_ConfirmNo:
 
 
 # ── SCENARIO 11 ──────────────────────────────────────────────────────────────
-# "If they confirm defer, put them at the start of the waiting list and notify
-#  the next person."
+# "If they confirm defer, they will swap with the next person in the waiting list."
 
 class TestScenario11_ConfirmDefer:
     def test_defer_sets_slot_declined(self, db):
@@ -636,7 +635,9 @@ class TestScenario11_ConfirmDefer:
         db.refresh(slot)
         assert slot.status == SlotStatus.DECLINED
 
-    def test_defer_puts_player_at_front_of_queue(self, db):
+    def test_defer_swaps_player_to_second_in_queue(self, db):
+        # 14 players: 12 slotted, 2 in queue (p13, p14).
+        # p1 defers → fill_slot pulls p13 → p1 inserted at position 2 behind p14.
         for i in range(1, 15):
             register_and_queue(db, i)
         game = scheduler.assign_next_game(db)
@@ -649,7 +650,8 @@ class TestScenario11_ConfirmDefer:
         queue = scheduler.get_queue(db)
         queued_ids = [e.player_id for e in queue]
         assert target_id in queued_ids, "Deferred player should be in queue"
-        assert queued_ids[0] == target_id, "Deferred player should be at FRONT of queue"
+        assert queued_ids[0] != target_id, "Deferred player should NOT be at front (swapped one step back)"
+        assert queued_ids[1] == target_id, "Deferred player should be at position 2 after swap"
 
     def test_defer_triggers_next_player_slot(self, db):
         for i in range(1, 15):
@@ -667,12 +669,11 @@ class TestScenario11_ConfirmDefer:
         )
 
     def test_defer_vs_no_queue_position(self, db):
-        """Deferred player ends up at FRONT; declined player ends up at END.
+        """Deferred player ends up ahead of declined player.
         With 20 players: 12 slotted (p1-p12), 8 in queue (p13-p20).
-        - p1 defers → fill_slot pulls p13 → p1 prepended to front → queue: [p1, p14..p20]
-        - p2 says no → fill_slot pulls p14 (p1 already has an active slot this game)
-                     → p2 appended to end → queue: [p1, p15..p20, p2]
-        So defer_player_id is ahead of no_player_id.
+        - p1 defers → fill_slot pulls p13 → p1 inserted at position 2 → queue: [p14, p1, p15..p20]
+        - p2 says no → fill_slot pulls p14 → p2 appended to end → queue: [p1, p15..p20, p2]
+        So defer_player_id is still ahead of no_player_id.
         """
         for i in range(1, 21):  # 20 players: 12 slotted, 8 in queue
             register_and_queue(db, i)

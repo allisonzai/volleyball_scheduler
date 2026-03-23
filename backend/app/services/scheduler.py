@@ -84,20 +84,22 @@ def _append_to_queue(db: Session, player_id: int) -> WaitingList:
     return entry
 
 
-def _prepend_to_queue(db: Session, player_id: int) -> WaitingList:
-    """Add player to front of waiting list (defer case)."""
+def _insert_at_second(db: Session, player_id: int) -> WaitingList:
+    """Insert player at position 2 (defer swap: next person goes first, deferred player is right behind)."""
     existing = db.query(WaitingList).filter(WaitingList.player_id == player_id).first()
     if existing:
-        existing.position = 0
+        existing.position = 1.5  # between pos 1 and pos 2; resequence will compact
         _resequence(db)
         return existing
 
-    # Shift everyone else down
-    db.query(WaitingList).update({WaitingList.position: WaitingList.position + 1})
+    # Shift everyone at position >= 2 down to make room
+    db.query(WaitingList).filter(WaitingList.position >= 2).update(
+        {WaitingList.position: WaitingList.position + 1}
+    )
     entry = WaitingList(
         player_id=player_id,
         signup_number=_next_signup_number(db),
-        position=1,
+        position=2,
     )
     db.add(entry)
     db.flush()
@@ -333,12 +335,12 @@ def handle_confirmation(player_id: int, game_id: int, response: str, db: Session
     elif response == "defer":
         slot.status = SlotStatus.DECLINED
         db.flush()
-        # Fill the slot from the current queue FIRST (so the deferred player
-        # doesn't immediately get re-notified), then prepend them so they are
-        # first in line for the next available slot / next game.
+        # Fill the slot first (removes the next queue player, so they won't be
+        # double-inserted), then place the deferred player at position 2 —
+        # they swap with the person who just filled their slot.
         fill_slot(db, game)
-        _prepend_to_queue(db, player_id)
-        logger.info(f"Player {player_id} deferred game {game_id} — moved to front of queue.")
+        _insert_at_second(db, player_id)
+        logger.info(f"Player {player_id} deferred game {game_id} — swapped with next player in queue.")
 
 
 def handle_timeout(player_id: int, game_id: int, db: Session) -> None:

@@ -29,8 +29,8 @@
 10. If they confirm **yes**, they are marked as playing.
 11. If they confirm **no**, they will be taken out of the current game and put
     at the end of the waiting list and the next person is notified.
-12. If they confirm **defer**, they are put at the start of the waiting list and
-    the next person is notified.
+12. If they confirm **defer**, they will swap with the next person in the
+    waiting list.
 13. Confirmation is done by typing `yes`, `no`, or `defer` in a short message,
     or by clicking the corresponding button in the app.
 
