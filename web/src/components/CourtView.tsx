@@ -21,8 +21,9 @@ export default function CourtView({ game, currentPlayerId }: Props) {
     );
   }
 
-  const confirmed = game.slots.filter((s) => s.status === "confirmed");
-  const pending = game.slots.filter((s) => s.status === "pending_confirmation");
+  const slots = Array.isArray(game.slots) ? game.slots : [];
+  const confirmed = slots.filter((s) => s.status === "confirmed");
+  const pending = slots.filter((s) => s.status === "pending_confirmation");
   const statusInfo = STATUS_LABELS[game.status] ?? { label: game.status, color: "text-gray-500" };
 
   return (

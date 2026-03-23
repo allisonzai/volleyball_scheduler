@@ -11,8 +11,8 @@ export function useGameState() {
   const refresh = useCallback(async () => {
     try {
       const [g, q] = await Promise.all([getCurrentGame(), getQueue()]);
-      setGame(g);
-      setQueue(q);
+      setGame(g && typeof g === "object" && "id" in g ? g : null);
+      setQueue(Array.isArray(q) ? q : []);
       setError(null);
     } catch (e) {
       setError("Failed to load game state.");
