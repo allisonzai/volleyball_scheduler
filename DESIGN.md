@@ -48,14 +48,14 @@ The following rules are taken directly from the specification.
 | R3 | If more than 12 players are present, the first 12 play and the rest wait. |
 | R4 | Players who arrive while a game is ongoing join the waiting list. |
 | R5 | When a game ends, court players rotate to the end of the waiting list. The next 12 in line play the following game. |
-| R6 | If 12 or fewer players are present, no scheduling is needed — everyone plays immediately. |
+| R6 | Even when 12 or fewer players are present, each must still confirm before the game starts. |
 | R7 | Any player may leave the waiting list at any time. A player in the waiting list may also defer to swap positions with the next person behind them. |
 | R7a | A confirmed player may leave an active game at any time. They are removed from both the game and the waiting list entirely. The next queued player is notified. |
 | R7b | The operator may "Start Over" to cancel the active game and clear the waiting list. Player accounts are preserved. |
 | R8 | When a player is scheduled, they are notified and have up to 5 minutes (configurable) to respond. |
 | R9 | Responding **yes** marks the player as playing. |
-| R10 | Responding **no** (or not responding within the timeout) removes the player from the current game and from the waiting list entirely. The next eligible player (no prior slot in this game) is notified. |
-| R11 | Responding **defer** swaps the player with the next eligible person in the queue. That person fills the vacated slot; the deferred player is placed at position 2. |
+| R10 | Responding **no** (or not responding within the timeout) removes the player from the current game and from the waiting list entirely. The **first** person in the waiting list who has not already deferred for the current game is notified as replacement. |
+| R11 | Responding **defer** swaps the player with the **first** person in the waiting list who has not already deferred for the current game. That person fills the vacated slot; the deferred player is placed at position 2. |
 | R12 | Confirmation is done by clicking **yes**, **no**, or **defer** in the app. |
 | R13 | Players are displayed as "FirstName L" — duplicates are disambiguated by appending the last 4 digits of their phone number in brackets, e.g. `Alice J [4242]`. |
 | R14 | Every player on the court and waiting list is shown alongside their signup number. |
@@ -213,6 +213,7 @@ volleyball_scheduler/
 │ game_id         FK → Game               │
 │ player_id       FK → Player             │
 │ position        INT   (court seat 1–12) │
+│ signup_number   INT NULL                │  ← copied from WaitingList at slot creation
 │ status          VARCHAR(30)             │
 │                   pending_confirmation  │
 │                   confirmed             │
@@ -244,8 +245,9 @@ volleyball_scheduler/
 | Invariant | Description |
 |---|---|
 | `WaitingList.player_id` is UNIQUE | A player appears at most once in the queue at any time. |
-| `WaitingList.signup_number` is monotonically increasing | Assigned from a global counter; never changes after assignment. |
+| `WaitingList.signup_number` is monotonically increasing | Assigned from a global counter; resets to 1 after Start Over (queue cleared). |
 | `WaitingList.position` is compacted to `1..N` | Resequenced after every mutation (join, leave, defer). |
+| `GameSlot.signup_number` is copied at slot creation | Captured from the player's `WaitingList` entry before they are removed from the queue; persists for display in the game view and past games history. |
 | A player has at most one slot per game | `fill_slot` excludes players who have any slot (any status) in the current game. |
 | `GameSlot.position` values are unique within a game | Tracks physical court seat assignment. |
 
@@ -296,20 +298,13 @@ if queue is empty:
 
 game = create Game(status=OPEN)
 
-if len(queue) ≤ MAX_PLAYERS:
-    # R6: everyone plays immediately — no confirmation needed
-    for each player in queue:
-        create GameSlot(status=CONFIRMED)
-    clear waiting list
-    game.status = IN_PROGRESS
-    game.started_at = now()
-else:
-    # R3: pull first MAX_PLAYERS, notify each
-    for each player in queue[:MAX_PLAYERS]:
-        remove from queue
-        create GameSlot(status=PENDING_CONFIRMATION)
-        send notification (SMS + push)
-        schedule 5-minute timeout
+# Always notify every selected player and require confirmation (R6)
+for each player in queue[:MAX_PLAYERS]:
+    capture player.signup_number          # saved before queue removal
+    remove from queue
+    create GameSlot(status=PENDING_CONFIRMATION, signup_number=signup_number)
+    send notification (SMS + push)
+    schedule confirmation timeout
 
 expire game (force SQLAlchemy to reload .slots relationship)
 return game
@@ -332,8 +327,9 @@ if next_player is None:
         game.started_at = now()
     return False
 
+capture next_player.signup_number        # saved before queue removal
 remove next_player from queue
-create GameSlot(status=PENDING_CONFIRMATION) for next_player
+create GameSlot(status=PENDING_CONFIRMATION, signup_number=signup_number)
 send notification
 schedule timeout
 expire game
@@ -359,11 +355,11 @@ if response == "yes":
 if response == "no":
     slot.status = DECLINED
     remove player from queue entirely     # R10 — they leave the system
-    fill_slot(game)                       # notify next person
+    fill_slot(game)                       # notify first eligible person (not already deferred)
 
 if response == "defer":
     slot.status = DECLINED
-    fill_slot(game)                       # notify next person FIRST  ← key ordering
+    fill_slot(game)                       # notify first eligible person FIRST  ← key ordering
     insert player at position 2 in queue  # R11 — behind the new front, ahead of everyone else
 ```
 
@@ -462,8 +458,10 @@ The `WaitingList` table uses two independent numbers per entry:
 
 | Field | Meaning | Mutability |
 |---|---|---|
-| `signup_number` | Global join order (1, 2, 3…) | **Never changes.** Shown in UI as the player's permanent number. |
+| `signup_number` | Queue join order for this session (1, 2, 3…). Resets to 1 after Start Over. | **Never changes** once assigned. Shown in UI as the player's number for this round. |
 | `position` | Current queue rank (1 = next to play) | **Resequenced** to compact integers after every mutation. |
+
+When a player moves from the queue into a game slot, their `signup_number` is copied onto the `GameSlot` record **before** the `WaitingList` row is deleted. This ensures the number is available for display in the court view and past games history even after the player is no longer in the queue.
 
 After every structural change (add, remove, prepend), `_resequence()` renumbers all remaining entries as `1, 2, 3, …N` to prevent gaps.
 
@@ -549,7 +547,8 @@ After every structural change (add, remove, prepend), `_resequence()` renumbers 
       "position": 1,
       "status": "confirmed",
       "display_name": "Alice S",
-      "signup_number": 1
+      "signup_number": 1,
+      "notified_at": "2026-03-22T10:04:56"
     }
   ]
 }
@@ -794,7 +793,7 @@ All configuration is read from environment variables (or a `.env` file) via Pyda
 
 ### 11.1 Test Scope
 
-The test suite (`backend/tests/test_scenarios.py`) contains **87 unit tests** that cover every rule in the specification. Tests run against an in-memory SQLite database with no network calls (notification services are stubbed) and timeouts triggered manually.
+The test suite (`backend/tests/test_scenarios.py`) contains **88 unit tests** that cover every rule in the specification. Tests run against an in-memory SQLite database with no network calls (notification services are stubbed) and timeouts triggered manually.
 
 ### 11.2 Test Structure
 

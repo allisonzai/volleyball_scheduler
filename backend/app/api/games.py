@@ -9,7 +9,6 @@ from app.config import settings
 from app.database import get_db
 from app.models.game import Game, GameStatus
 from app.models.game_slot import SlotStatus
-from app.models.waiting_list import WaitingList
 from app.schemas.game import GameOut, SlotOut, GameCreate
 from app.services import scheduler
 
@@ -22,28 +21,19 @@ def _require_operator(token: Optional[str]) -> None:
 
 
 def _slot_to_schema(slot) -> SlotOut:
-    # Look up signup_number from waiting_list history — we store it on the slot's player's current entry
-    # For past games, the player may no longer be in the waiting list; the signup_number is the
-    # number assigned at first-ever queue join. We approximate via the slot position for simplicity.
     return SlotOut(
         id=slot.id,
         player_id=slot.player_id,
         position=slot.position,
         status=slot.status,
         display_name=slot.player.display_name,
-        signup_number=None,  # enriched below if available
+        signup_number=slot.signup_number,
+        notified_at=slot.notified_at,
     )
 
 
 def _game_to_schema(game: Game, db: Session) -> GameOut:
-    slots = []
-    for slot in sorted(game.slots, key=lambda s: s.position):
-        s = _slot_to_schema(slot)
-        # Try to get signup_number from waiting_list entry if player is in queue
-        wl = db.query(WaitingList).filter(WaitingList.player_id == slot.player_id).first()
-        if wl:
-            s.signup_number = wl.signup_number
-        slots.append(s)
+    slots = [_slot_to_schema(slot) for slot in sorted(game.slots, key=lambda s: s.position)]
     return GameOut(
         id=game.id,
         status=game.status,

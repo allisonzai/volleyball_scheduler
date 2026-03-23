@@ -189,11 +189,12 @@ def _notify_slot(slot: GameSlot, game: Game, db: Session) -> None:
     _schedule_timeout(slot.player_id, game.id)
 
 
-def _create_slot_and_notify(db: Session, game: Game, player_id: int) -> GameSlot:
+def _create_slot_and_notify(db: Session, game: Game, player_id: int, signup_number: Optional[int] = None) -> GameSlot:
     slot = GameSlot(
         game_id=game.id,
         player_id=player_id,
         position=_next_slot_position(game),
+        signup_number=signup_number,
         status=SlotStatus.PENDING_CONFIRMATION,
     )
     db.add(slot)
@@ -204,8 +205,36 @@ def _create_slot_and_notify(db: Session, game: Game, player_id: int) -> GameSlot
 
 
 # ---------------------------------------------------------------------------
-# Fill an open slot from the waiting list
+# Fill open slots from the waiting list
 # ---------------------------------------------------------------------------
+
+def _try_fill_open_slots(db: Session, game: Game) -> None:
+    """Called after any slot resolves. Once no slots remain pending, batch-fill
+    missing spots from the queue — or start the game if the queue is exhausted."""
+    db.expire(game)
+    if _pending_count(game) > 0:
+        return  # still waiting for outstanding responses
+
+    confirmed = _confirmed_count(game)
+    if confirmed == 0:
+        return  # no one confirmed — game will not start
+
+    needed = game.max_players - confirmed
+    if needed <= 0:
+        # Full house of confirmed players — start the game
+        if game.status == GameStatus.OPEN:
+            game.status = GameStatus.IN_PROGRESS
+            game.started_at = datetime.utcnow()
+            db.flush()
+        return
+
+    # Batch-fill: pull up to `needed` replacements from the queue at once.
+    # fill_slot handles the IN_PROGRESS transition when the queue runs dry.
+    for _ in range(needed):
+        if not fill_slot(db, game):
+            break  # queue exhausted; fill_slot already transitioned game if needed
+        db.expire(game)
+
 
 def fill_slot(db: Session, game: Game) -> bool:
     """Pull the next eligible player from the queue and assign them to the game.
@@ -233,8 +262,9 @@ def fill_slot(db: Session, game: Game) -> bool:
         return False
 
     player_id = next_entry.player_id
+    signup_number = next_entry.signup_number
     _remove_from_queue(db, player_id)
-    _create_slot_and_notify(db, game, player_id)
+    _create_slot_and_notify(db, game, player_id, signup_number)
     db.expire(game)  # force slots to reload on next access
     return True
 
@@ -260,8 +290,9 @@ def assign_next_game(db: Session) -> Optional[Game]:
     # Always notify players and require confirmation, regardless of queue size
     candidates = queue[: settings.MAX_PLAYERS]
     for entry in candidates:
+        signup_number = entry.signup_number
         _remove_from_queue(db, entry.player_id)
-        _create_slot_and_notify(db, game, entry.player_id)
+        _create_slot_and_notify(db, game, entry.player_id, signup_number)
 
     # Expire and reload so the returned game object has a current .slots collection
     db.expire(game)
@@ -294,24 +325,15 @@ def handle_confirmation(player_id: int, game_id: int, response: str, db: Session
     if response == "yes":
         slot.status = SlotStatus.CONFIRMED
         db.flush()
-        # Check if we have enough confirmed players to start
-        if _confirmed_count(game) + _pending_count(game) == 0:
-            # All slots resolved
-            if _confirmed_count(game) > 0:
-                game.status = GameStatus.IN_PROGRESS
-                game.started_at = datetime.utcnow()
-        elif _pending_count(game) == 0:
-            # All pending resolved
-            if _confirmed_count(game) > 0:
-                game.status = GameStatus.IN_PROGRESS
-                game.started_at = datetime.utcnow()
+        _try_fill_open_slots(db, game)
         logger.info(f"Player {player_id} confirmed for game {game_id}.")
 
     elif response == "no":
         slot.status = SlotStatus.DECLINED
         db.flush()
         _remove_from_queue(db, player_id)
-        fill_slot(db, game)
+        # Don't fill immediately — wait until all pending slots resolve, then batch-fill
+        _try_fill_open_slots(db, game)
         logger.info(f"Player {player_id} declined game {game_id} — removed from queue.")
 
     elif response == "defer":

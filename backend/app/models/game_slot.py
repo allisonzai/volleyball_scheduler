@@ -22,6 +22,7 @@ class GameSlot(Base):
     game_id: Mapped[int] = mapped_column(ForeignKey("games.id"), index=True)
     player_id: Mapped[int] = mapped_column(ForeignKey("players.id"), index=True)
     position: Mapped[int] = mapped_column(Integer)
+    signup_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String(30), default=SlotStatus.PENDING_CONFIRMATION)
     notified_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     responded_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

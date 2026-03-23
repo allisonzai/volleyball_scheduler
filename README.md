@@ -5,12 +5,12 @@ A full-stack volleyball game scheduling system with a Python/FastAPI backend, Re
 ## Features
 
 - Player registration (name, phone, email, password) with instant sign-in
-- First-come-first-served signup queue with permanent signup numbers
+- First-come-first-served signup queue with per-session signup numbers (reset to 1 after Start Over); numbers persist on game slots for history display
 - Auto-scheduling: first 12 players are notified; game starts on confirmation
 - **yes** — player confirmed, takes their spot
-- **no** — player removed from game, moved to end of queue; next eligible player notified
-- **defer** — player swaps with the next person in the queue (goes to position 2)
-- Configurable 5-minute confirmation timeout (no response → end of queue)
+- **no** — player removed from game and queue entirely; first eligible player (not already deferred) notified
+- **defer** — swaps with the first eligible player in the queue (not already deferred); deferred player goes to position 2
+- Configurable 5-minute confirmation timeout (no response = no; player removed from queue)
 - Players can leave the waiting list, or defer to swap with the next person behind them
 - Confirmed players can leave an active game (removed from queue entirely)
 - Display names: `FirstName L` — disambiguated with last 4 phone digits in brackets if duplicate (e.g. `Alice J [4242]`)
@@ -138,18 +138,17 @@ EXPO_PUBLIC_API_URL=http://192.168.1.100:8000 npx expo start
 
 ## Scheduling Logic
 
-1. Players join the waiting list (assigned a permanent signup number).
+1. Players join the waiting list (assigned a signup number; resets to 1 after Start Over).
 2. Operator clicks **Start New Game**.
-3. If ≤ 12 players: everyone is confirmed immediately, game starts.
-4. If > 12 players: first 12 are notified via SMS + push.
-5. Each player has 5 minutes to respond:
-   - **yes** → confirmed
-   - **no** → removed from queue entirely; next eligible player notified
-   - **defer** → swaps to position 2 in queue; next eligible player notified
+3. First 12 players are notified via SMS + push; their signup number is saved on their game slot.
+4. Each player has 5 minutes to respond (configurable):
+   - **yes** → confirmed, keeps their spot
+   - **no** → removed from queue entirely; first eligible player (not already deferred) notified
+   - **defer** → swaps to position 2 in queue; first eligible player notified
    - *(no response)* → treated as **no**: removed from queue entirely
-6. Game starts when all pending slots are resolved.
-7. When the game ends, confirmed court players rotate to the end of the queue.
-8. Operator clicks **Start New Game** to begin the next round.
+5. Game starts when all pending slots are resolved.
+6. When the game ends, confirmed court players rotate to the end of the queue.
+7. Operator clicks **Start New Game** to begin the next round.
 
 ### Operator Controls
 
@@ -169,4 +168,4 @@ cd backend
 PYTHONPATH=. pytest tests/test_scenarios.py -v
 ```
 
-87 scenario-driven tests covering all spec requirements.
+88 scenario-driven tests covering all spec requirements.

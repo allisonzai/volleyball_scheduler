@@ -510,6 +510,9 @@ class TestScenario8_ConfigurableTimeout:
         assert target_id not in queued_ids, "Timed-out player should NOT be in queue"
 
     def test_timeout_triggers_next_player_notification(self, db):
+        # 14 players: 12 slotted (pending), 2 in queue (p13, p14).
+        # p1 times out — 11 still pending, no fill yet.
+        # Once all remaining resolve (yes), p13 is batch-filled from the queue.
         for i in range(1, 15):
             register_and_queue(db, i)
         game = scheduler.assign_next_game(db)
@@ -522,8 +525,16 @@ class TestScenario8_ConfigurableTimeout:
         db.commit()
 
         db.refresh(game)
+        assert len(game.slots) == initial_slot_count, (
+            "No fill should happen while other slots are still pending"
+        )
+
+        for slot in list(game.slots)[1:]:
+            scheduler.handle_confirmation(slot.player_id, game.id, "yes", db)
+        db.commit()
+        db.refresh(game)
         assert len(game.slots) == initial_slot_count + 1, (
-            "A new slot should be created for the next player after timeout"
+            "Replacement player should be notified after all pending slots resolve"
         )
 
     def test_response_after_timeout_is_ignored(self, db):
@@ -597,8 +608,9 @@ class TestScenario9_ConfirmYes:
 
 
 # ── SCENARIO 10 ──────────────────────────────────────────────────────────────
-# "If they confirm no, they will be taken out of the current game and put at
-#  the end of the waiting list and notify the next person."
+# "If they confirm no, they will be taken out of the current game and not be
+#  added to the waiting list. The first person in the waiting list who has not
+#  already deferred for the current game will be selected as a replacement."
 
 class TestScenario10_ConfirmNo:
     def test_no_sets_slot_declined(self, db):
@@ -629,6 +641,9 @@ class TestScenario10_ConfirmNo:
         assert target_id not in queued_ids, "Player who said no should NOT be in queue"
 
     def test_no_triggers_next_player_slot(self, db):
+        # 14 players: 12 slotted (pending), 2 in queue (p13, p14).
+        # p1 says no — 11 still pending, no fill yet.
+        # Once all remaining resolve (yes), p13 is batch-filled from the queue.
         for i in range(1, 15):
             register_and_queue(db, i)
         game = scheduler.assign_next_game(db)
@@ -639,8 +654,17 @@ class TestScenario10_ConfirmNo:
         db.commit()
 
         db.refresh(game)
+        assert len(game.slots) == initial_slots, (
+            "No fill should happen while other slots are still pending"
+        )
+
+        # Once all remaining pending players confirm, the replacement is pulled
+        for slot in list(game.slots)[1:]:
+            scheduler.handle_confirmation(slot.player_id, game.id, "yes", db)
+        db.commit()
+        db.refresh(game)
         assert len(game.slots) == initial_slots + 1, (
-            "Next player from queue should be notified after a no"
+            "Replacement player should be notified after all pending slots resolve"
         )
 
     def test_no_with_empty_queue_does_not_crash(self, db):
@@ -662,7 +686,9 @@ class TestScenario10_ConfirmNo:
 
 
 # ── SCENARIO 11 ──────────────────────────────────────────────────────────────
-# "If they confirm defer, they will swap with the next person in the waiting list."
+# "If they confirm defer, they will be taken out of the current game and swapped
+#  with the first person in the waiting list who has not already deferred for the
+#  current game."
 
 class TestScenario11_ConfirmDefer:
     def test_defer_sets_slot_declined(self, db):
@@ -892,31 +918,24 @@ class TestEdgeCases:
 
     def test_chain_of_all_declines_exhausts_queue(self, db):
         """When all backup players are exhausted, the game starts with whoever confirmed.
-        With 13 players (12 slotted, 1 backup):
-          - p1 says yes
-          - p2 says no → backup (p13) is notified
-          - p3 says no → no new backup available → game starts immediately with p1
-        Remaining PENDING slots (p4-p12) are left unresolved but game is IN_PROGRESS.
+        With 13 players (12 slotted, 1 backup — p13):
+          - p1 says yes; p2–p12 say no (last one triggers batch fill)
+          - batch fill: p13 pulled from queue (pending), queue now empty
+          - queue exhausted mid-fill → game transitions to IN_PROGRESS
         """
         for i in range(1, 14):  # 13 players: 12 slotted, 1 in queue
             register_and_queue(db, i)
         game = scheduler.assign_next_game(db)
         db.commit()
 
-        first_slot = game.slots[0]
-        second_slot = game.slots[1]
-        third_slot = game.slots[2]
-
-        # p1 confirms
-        scheduler.handle_confirmation(first_slot.player_id, game.id, "yes", db)
-        # p2 says no → p13 (only backup) is notified
-        scheduler.handle_confirmation(second_slot.player_id, game.id, "no", db)
-        # p3 says no → queue now empty of NEW players → game starts with just p1
-        scheduler.handle_confirmation(third_slot.player_id, game.id, "no", db)
+        # p1 confirms; p2-p12 decline — only after all 12 resolve does batch fill run
+        scheduler.handle_confirmation(game.slots[0].player_id, game.id, "yes", db)
+        for slot in game.slots[1:]:
+            scheduler.handle_confirmation(slot.player_id, game.id, "no", db)
         db.commit()
 
         db.refresh(game)
-        # Game should have started because queue was exhausted and p1 confirmed
+        # Batch fill ran: p13 notified (pending) + queue exhausted → IN_PROGRESS
         assert game.status == GameStatus.IN_PROGRESS, (
             f"Game should start once backup queue is exhausted; got {game.status}"
         )
