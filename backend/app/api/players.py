@@ -64,6 +64,7 @@ def register_player(data: PlayerCreate, db: Session = Depends(get_db)):
         display_name=display,
         secret_token=secrets.token_hex(32),
         password_hash=hash_password(data.password),
+        is_verified=True,
     )
     db.add(player)
     db.commit()

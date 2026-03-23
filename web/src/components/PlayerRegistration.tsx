@@ -56,8 +56,7 @@ export default function PlayerRegistration({ onRegistered, onCancel }: Props) {
         email: registerForm.email,
         password: registerForm.password,
       });
-      setPendingPlayer(player);
-      setStep("verify");
+      onRegistered(player);
     } catch (err) {
       setError(errMsg(err));
     } finally {
@@ -73,12 +72,7 @@ export default function PlayerRegistration({ onRegistered, onCancel }: Props) {
     setLoading(true);
     try {
       const player = await signIn(signinForm.phone.trim(), signinForm.password);
-      if (!player.is_verified) {
-        setPendingPlayer(player);
-        setStep("verify");
-      } else {
-        onRegistered(player);
-      }
+      onRegistered(player);
     } catch (err) {
       setError(errMsg(err));
     } finally {
