@@ -28,6 +28,10 @@ import time
 from pathlib import Path
 
 import httpx
+from dotenv import dotenv_values
+
+# Load backend/.env so BASE_URL and OPERATOR_SECRET are available by default
+_env = dotenv_values(Path(__file__).parent.parent / ".env")
 
 # ---------------------------------------------------------------------------
 # Fake player data
@@ -243,15 +247,19 @@ def cmd_cleanup(client: httpx.Client) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Seed fake players into the Volleyball Scheduler.")
-    parser.add_argument("--url", default="http://localhost:8000", help="Backend base URL")
+    parser.add_argument(
+        "--url",
+        default=_env.get("BASE_URL", "http://localhost:8000"),
+        help="Backend base URL (default: BASE_URL from backend/.env)",
+    )
     parser.add_argument("--count", type=int, default=15, help="Number of players to register (max 20)")
     parser.add_argument("--no-queue", action="store_true", help="Register players but don't join queue")
     parser.add_argument("--demo", action="store_true", help="Full demo: register + queue + start + confirm + end")
     parser.add_argument("--cleanup", action="store_true", help="Deregister all seeded players")
     parser.add_argument(
         "--operator-secret",
-        default=os.environ.get("OPERATOR_SECRET", "change-me-in-production"),
-        help="Operator secret (or set OPERATOR_SECRET env var)",
+        default=_env.get("OPERATOR_SECRET", os.environ.get("OPERATOR_SECRET", "change-me-in-production")),
+        help="Operator secret (default: OPERATOR_SECRET from backend/.env)",
     )
     args = parser.parse_args()
 
