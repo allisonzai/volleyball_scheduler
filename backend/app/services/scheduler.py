@@ -344,7 +344,8 @@ def handle_confirmation(player_id: int, game_id: int, response: str, db: Session
 
 
 def handle_timeout(player_id: int, game_id: int, db: Session) -> None:
-    """Called when a player doesn't respond within the configured timeout."""
+    """Called when a player doesn't respond within the configured timeout.
+    No response is treated as 'no': player is declined and moved to end of queue."""
     slot = (
         db.query(GameSlot)
         .filter(GameSlot.game_id == game_id, GameSlot.player_id == player_id)
@@ -352,15 +353,8 @@ def handle_timeout(player_id: int, game_id: int, db: Session) -> None:
     )
     if not slot or slot.status != SlotStatus.PENDING_CONFIRMATION:
         return
-
-    slot.status = SlotStatus.TIMED_OUT
-    slot.responded_at = datetime.utcnow()
-    db.flush()
-
-    game = db.query(Game).filter(Game.id == game_id).first()
-    _append_to_queue(db, player_id)
-    fill_slot(db, game)
-    logger.info(f"Player {player_id} timed out for game {game_id} — moved to end of queue.")
+    logger.info(f"Player {player_id} timed out for game {game_id} — defaulting to 'no'.")
+    handle_confirmation(player_id, game_id, "no", db)
 
 
 def end_game(game_id: int, db: Session) -> Game:

@@ -371,13 +371,14 @@ if response == "defer":
 
 ### 5.4 Handling a Timeout: `handle_timeout(player_id, game_id, db)`
 
+No response within the timeout window is treated identically to "no".
+
 ```
 if slot.status != PENDING_CONFIRMATION:
     return   # already responded; ignore late fire
 
-slot.status = TIMED_OUT
-append player to END of queue
-fill_slot(game)
+handle_confirmation(player_id, game_id, "no", db)
+# → slot.status = DECLINED, player appended to END of queue, fill_slot called
 ```
 
 ### 5.5 Ending a Game: `end_game(game_id, db)`

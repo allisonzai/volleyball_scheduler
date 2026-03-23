@@ -28,10 +28,14 @@
 9. The player scheduled for a game will be notified and wait for up to
    5 minutes (configurable).
 10. If they confirm **yes**, they are marked as playing.
-11. If they confirm **no**, they will be taken out of the current game and put
-    at the end of the waiting list and the next person in the waiting list but not deferring for the current game will be selected as a replacement.
-12. If they confirm **defer**, they will be take out of the current game and swapped with the next person in the waiting list but not deferring for the current game.
-13. Confirmation is done by typing `yes`, `no`, or `defer` by clicking the corresponding button in the app.
+11. If they confirm **no** (or do not respond within the timeout), they will be
+    taken out of the current game and put at the end of the waiting list. The
+    next person in the waiting list who has not already deferred for the current
+    game will be selected as a replacement.
+12. If they confirm **defer**, they will be taken out of the current game and
+    swapped with the next person in the waiting list who has not already deferred
+    for the current game.
+13. Confirmation is done by clicking the corresponding button in the app.
 14. The player in the waiting list can choose 'Leave' to remove them from the list or 'Defer' to swap with the next person in the waiting list.
 
 ## Player Registration

@@ -493,7 +493,7 @@ class TestScenario8_ConfigurableTimeout:
 
         target_id = game.slots[0].player_id
 
-        # Simulate timeout
+        # Simulate timeout — treated as 'no'
         scheduler.handle_timeout(target_id, game.id, db)
         db.commit()
 
@@ -501,7 +501,7 @@ class TestScenario8_ConfigurableTimeout:
             GameSlot.game_id == game.id,
             GameSlot.player_id == target_id
         ).first()
-        assert slot.status == SlotStatus.TIMED_OUT, "Slot should be TIMED_OUT"
+        assert slot.status == SlotStatus.DECLINED, "Timeout should be treated as 'no' (DECLINED)"
 
         queue = scheduler.get_queue(db)
         queued_ids = [e.player_id for e in queue]
@@ -536,7 +536,7 @@ class TestScenario8_ConfigurableTimeout:
         scheduler.handle_timeout(target_id, game.id, db)
         db.commit()
 
-        # Late YES should be silently ignored (slot is already TIMED_OUT)
+        # Late YES should be silently ignored (slot is already DECLINED)
         scheduler.handle_confirmation(target_id, game.id, "yes", db)
         db.commit()
 
@@ -544,7 +544,7 @@ class TestScenario8_ConfigurableTimeout:
             GameSlot.game_id == game.id,
             GameSlot.player_id == target_id
         ).first()
-        assert slot.status == SlotStatus.TIMED_OUT, (
+        assert slot.status == SlotStatus.DECLINED, (
             "Slot status should not change after a timed-out player sends a late yes"
         )
 

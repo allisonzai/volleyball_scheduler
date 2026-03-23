@@ -146,7 +146,7 @@ EXPO_PUBLIC_API_URL=http://192.168.1.100:8000 npx expo start
    - **yes** → confirmed
    - **no** → moved to end of queue; next eligible player notified
    - **defer** → swaps to position 2 in queue; next eligible player notified
-   - *(no response)* → timeout, moved to end of queue
+   - *(no response)* → treated as **no**: moved to end of queue
 6. Game starts when all pending slots are resolved.
 7. When the game ends, confirmed court players rotate to the end of the queue.
 8. Operator clicks **Start New Game** to begin the next round.
