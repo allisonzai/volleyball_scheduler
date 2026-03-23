@@ -20,7 +20,13 @@ export default function Home() {
   const [showQR, setShowQR] = useState(false);
   const [timeoutSeconds, setTimeoutSeconds] = useState(300);
   const [timeoutInput, setTimeoutInput] = useState("5");
+  const [now, setNow] = useState(new Date());
   const pageUrl = window.location.href;
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     getSettings().then((s: { confirm_timeout_seconds: number }) => {
@@ -134,6 +140,13 @@ export default function Home() {
                 <rect x="18" y="18" width="3" height="3" />
               </svg>
             </button>
+          </div>
+          <div className="flex items-center gap-1.5 text-sm font-mono text-gray-500">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+            {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
           </div>
           {player ? (
             <div className="flex items-center gap-2">
