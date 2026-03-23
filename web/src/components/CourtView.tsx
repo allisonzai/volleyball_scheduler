@@ -18,7 +18,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 export default function CourtView({ game, currentPlayerId, currentPlayer, onRefresh }: Props) {
   const handleLeaveGame = async () => {
     if (!currentPlayer || !game) return;
-    if (!confirm("Leave the current game? You'll be moved to the end of the waiting list.")) return;
+    if (!confirm("Leave the current game? You'll be removed from the game and waiting list.")) return;
     try {
       await leaveGame(game.id, currentPlayer.secret_token);
       onRefresh();

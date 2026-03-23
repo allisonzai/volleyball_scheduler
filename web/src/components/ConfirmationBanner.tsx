@@ -57,7 +57,7 @@ export default function ConfirmationBanner({ game, playerId, playerToken, onDone
         </button>
       </div>
       <p className="text-xs text-yellow-600 mt-3 text-center">
-        You have {Math.floor(game.id)} minutes to respond. No response = moved to end of queue.
+        You have 5 minutes to respond. No response = moved to end of queue.
       </p>
     </div>
   );
