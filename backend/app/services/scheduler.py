@@ -7,6 +7,7 @@ State machine:
 """
 import asyncio
 import logging
+import threading
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -19,16 +20,8 @@ from app.services.notifications import notify_player
 
 logger = logging.getLogger(__name__)
 
-# In-memory map of (player_id, game_id) -> asyncio.Task for confirmation timeouts
+# In-memory map of (player_id, game_id) -> threading.Timer for confirmation timeouts
 _timeout_tasks: dict = {}
-
-# Captured main event loop — set at app startup via set_event_loop()
-_main_loop: Optional[asyncio.AbstractEventLoop] = None
-
-
-def set_event_loop(loop: asyncio.AbstractEventLoop) -> None:
-    global _main_loop
-    _main_loop = loop
 
 # SSE broadcast queue — any listener can subscribe
 _sse_subscribers: list[asyncio.Queue] = []
@@ -150,17 +143,16 @@ def _next_slot_position(game: Game) -> int:
 
 def _cancel_timeout(player_id: int, game_id: int) -> None:
     key = (player_id, game_id)
-    future = _timeout_tasks.pop(key, None)
-    if future and not future.done():
-        future.cancel()
+    timer = _timeout_tasks.pop(key, None)
+    if timer is not None:
+        timer.cancel()
 
 
 def _schedule_timeout(player_id: int, game_id: int) -> None:
     """Schedule a confirmation timeout for this player/game pair."""
     from app.database import SessionLocal
 
-    async def _timeout_job():
-        await asyncio.sleep(settings.CONFIRM_TIMEOUT_SECONDS)
+    def _timeout_job():
         db = SessionLocal()
         try:
             handle_timeout(player_id, game_id, db)
@@ -174,15 +166,14 @@ def _schedule_timeout(player_id: int, game_id: int) -> None:
         _timeout_tasks.pop((player_id, game_id), None)
 
     key = (player_id, game_id)
-    if key in _timeout_tasks and not _timeout_tasks[key].done():
-        return  # already scheduled
+    existing = _timeout_tasks.get(key)
+    if existing is not None:
+        existing.cancel()
 
-    if _main_loop is None or _main_loop.is_closed():
-        logger.warning("No event loop available — timeout not scheduled.")
-        return
-
-    future = asyncio.run_coroutine_threadsafe(_timeout_job(), _main_loop)
-    _timeout_tasks[key] = future
+    timer = threading.Timer(settings.CONFIRM_TIMEOUT_SECONDS, _timeout_job)
+    timer.daemon = True
+    timer.start()
+    _timeout_tasks[key] = timer
 
 
 # ---------------------------------------------------------------------------

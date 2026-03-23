@@ -31,8 +31,8 @@ def db():
     settings.MAX_PLAYERS = 12
     settings.CONFIRM_TIMEOUT_SECONDS = 300
 
-    # Disable timeout scheduling during unit tests (no event loop)
-    scheduler._main_loop = None
+    # Disable timeout scheduling during unit tests by clearing any pending timers
+    scheduler._timeout_tasks.clear()
 
     yield session
     session.close()
@@ -51,6 +51,7 @@ def make_player(db, n: int, first="Player", last=None) -> Player:
         email=email,
         display_name=display,
         secret_token=f"test-token-{n:04d}",
+        password_hash="test-hash",
         is_verified=True,
     )
     db.add(p)

@@ -24,29 +24,10 @@ export function useGameState() {
   useEffect(() => {
     refresh();
 
-    // SSE for real-time updates
-    const es = new EventSource("/api/events");
-    es.onmessage = (event) => {
-      const data = event.data;
-      if (data === "connected") return;
-      try {
-        const parsed = JSON.parse(data);
-        if (parsed.type === "game_update" || parsed.type === "queue_update") {
-          refresh();
-        }
-      } catch {
-        refresh();
-      }
-    };
-    es.onerror = () => {
-      // Fall back to polling every 5s if SSE fails
-    };
-
-    // Polling fallback every 5s
+    // Poll every 5s for updates
     const poll = setInterval(refresh, 5000);
 
     return () => {
-      es.close();
       clearInterval(poll);
     };
   }, [refresh]);
