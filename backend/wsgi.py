@@ -1,15 +1,21 @@
 import sys
 import os
 
-# Must set working directory BEFORE importing the app
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-# Load .env explicitly before app config is read
 from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
 
-from a2wsgi import ASGIMiddleware
-from app.main import app
+from app.main import app  # init_db() runs here at import time
 
-application = ASGIMiddleware(app)
+# Lazy wrapper: ASGIMiddleware is created on the first request inside the
+# worker process (after uWSGI fork), so its event-loop thread is alive.
+_asgi = None
+
+def application(environ, start_response):
+    global _asgi
+    if _asgi is None:
+        from a2wsgi import ASGIMiddleware
+        _asgi = ASGIMiddleware(app)
+    return _asgi(environ, start_response)

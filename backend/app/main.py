@@ -7,10 +7,9 @@ from app.config import settings
 
 app = FastAPI(title="Volleyball Scheduler", version="1.0.0")
 
-
-@app.on_event("startup")
-def startup() -> None:
-    init_db()
+# Init DB at import time so WSGI workers (forked from master) all have the
+# schema ready without needing any async lifespan events.
+init_db()
 
 app.add_middleware(
     CORSMiddleware,
