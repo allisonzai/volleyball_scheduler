@@ -32,10 +32,18 @@
 11. If they confirm **no** (or do not respond within the timeout), they will be
     taken out of the current game and not be added to the waiting list. The
     first person in the waiting list who has not already deferred for the
-    current game will be selected as a replacement.
+    current game will be selected as a replacement. Replacements are not pulled
+    one-by-one — the system waits until **all** pending slots are resolved, then
+    batch-fills all vacant spots from the queue at once. If the queue (including
+    deferred players who were re-inserted) is smaller than the number of vacant
+    spots, all available queue players are added. The game starts once at least
+    one player in the new batch confirms; if no one confirms and the queue is
+    empty, the game remains open until the operator clicks Start Over.
 12. If they confirm **defer**, they will be taken out of the current game and
     swapped with the first person in the waiting list who has not already
-    deferred for the current game.
+    deferred for the current game. The deferred player is re-inserted into the
+    queue and is eligible to be drawn again during a subsequent batch fill if
+    the queue would otherwise be too small.
 13. Confirmation is done by clicking the corresponding button in the app.
 14. The player in the waiting list can choose **Leave** to remove them from the
     list or **Defer** to swap with the next person in the waiting list.
