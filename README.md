@@ -9,7 +9,7 @@ A full-stack volleyball game scheduling system with a Python/FastAPI backend, Re
 - Auto-scheduling: first 12 players are notified; game starts on confirmation
 - **yes** — player confirmed, takes their spot
 - **no** — player removed from game and queue entirely; first eligible player (not already deferred) notified
-- **defer** — swaps with the first eligible player in the queue (not already deferred); deferred player goes to position 2
+- **defer** — swaps with the first eligible player in the queue (not already deferred); deferred player is re-inserted before the next non-deferred queue entry, keeping their original signup number
 - Configurable 5-minute confirmation timeout (no response = no; player removed from queue)
 - Players can leave the waiting list, or defer to swap with the next person behind them
 - Confirmed players can leave an active game (removed from queue entirely)
@@ -144,7 +144,7 @@ EXPO_PUBLIC_API_URL=http://192.168.1.100:8000 npx expo start
 4. Each player has 5 minutes to respond (configurable):
    - **yes** → confirmed, keeps their spot
    - **no** → removed from queue entirely; first eligible player (not already deferred) notified
-   - **defer** → swaps to position 2 in queue; first eligible player notified
+   - **defer** → first eligible player fills the slot; deferred player re-inserted before next non-deferred queue entry, original signup number preserved
    - *(no response)* → treated as **no**: removed from queue entirely
 5. Game starts when all pending slots are resolved.
 6. When the game ends, confirmed court players rotate to the end of the queue.
@@ -168,4 +168,4 @@ cd backend
 PYTHONPATH=. pytest tests/test_scenarios.py -v
 ```
 
-88 scenario-driven tests covering all spec requirements.
+90 scenario-driven tests covering all spec requirements.

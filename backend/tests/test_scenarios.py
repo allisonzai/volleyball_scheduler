@@ -704,9 +704,10 @@ class TestScenario11_ConfirmDefer:
         db.refresh(slot)
         assert slot.status == SlotStatus.DECLINED
 
-    def test_defer_swaps_player_to_second_in_queue(self, db):
+    def test_defer_swaps_player_to_position_of_first_eligible(self, db):
         # 14 players: 12 slotted, 2 in queue (p13, p14).
-        # p1 defers → fill_slot pulls p13 → p1 inserted at position 2 behind p14.
+        # p1 defers → fill_slot pulls p13 (first eligible) → p1 inserted before
+        # p14 (now first eligible in queue) → queue: [p1, p14].
         for i in range(1, 15):
             register_and_queue(db, i)
         game = scheduler.assign_next_game(db)
@@ -719,8 +720,9 @@ class TestScenario11_ConfirmDefer:
         queue = scheduler.get_queue(db)
         queued_ids = [e.player_id for e in queue]
         assert target_id in queued_ids, "Deferred player should be in queue"
-        assert queued_ids[0] != target_id, "Deferred player should NOT be at front (swapped one step back)"
-        assert queued_ids[1] == target_id, "Deferred player should be at position 2 after swap"
+        assert queued_ids[0] == target_id, (
+            "Deferred player should be at position 1 — they swap with p13 who was first eligible"
+        )
 
     def test_defer_triggers_next_player_slot(self, db):
         for i in range(1, 15):
@@ -737,11 +739,55 @@ class TestScenario11_ConfirmDefer:
             "Next queued player should be notified after a defer"
         )
 
+    def test_defer_preserves_signup_number(self, db):
+        """Deferred player keeps their original signup number, not a new one."""
+        for i in range(1, 15):
+            register_and_queue(db, i)
+        game = scheduler.assign_next_game(db)
+        db.commit()
+
+        slot = game.slots[0]
+        original_signup_number = slot.signup_number
+        target_id = slot.player_id
+
+        scheduler.handle_confirmation(target_id, game.id, "defer", db)
+        db.commit()
+
+        queue = scheduler.get_queue(db)
+        entry = next(e for e in queue if e.player_id == target_id)
+        assert entry.signup_number == original_signup_number, (
+            "Deferred player should keep their original signup number"
+        )
+
+    def test_defer_behind_prior_deferrer(self, db):
+        """If D1 already deferred (has a slot), a new deferrer goes after D1."""
+        # 15 players: 12 slotted, 3 in queue (p13, p14, p15)
+        for i in range(1, 16):
+            register_and_queue(db, i)
+        game = scheduler.assign_next_game(db)
+        db.commit()
+
+        # p1 defers first → fill_slot pulls p13 → p1 inserted before p14 → [p1, p14, p15]
+        p1_id = game.slots[0].player_id
+        scheduler.handle_confirmation(p1_id, game.id, "defer", db)
+        db.commit()
+
+        # p2 defers → fill_slot should skip p1 (already has DECLINED slot), pull p14
+        # p2 inserted before p15 (first eligible after p1) → [p1, p2, p15]
+        p2_id = game.slots[1].player_id
+        scheduler.handle_confirmation(p2_id, game.id, "defer", db)
+        db.commit()
+
+        queue = scheduler.get_queue(db)
+        ids = [e.player_id for e in queue]
+        assert ids[0] == p1_id, "p1 (deferred first) should be at position 1"
+        assert ids[1] == p2_id, "p2 (deferred second) should be at position 2, behind p1"
+
     def test_defer_stays_in_queue_no_does_not(self, db):
         """Deferred player stays in queue; declined player is removed entirely.
         With 20 players: 12 slotted (p1-p12), 8 in queue (p13-p20).
-        - p1 defers → fill_slot pulls p13 → p1 inserted at position 2
-        - p2 says no  → fill_slot pulls p14 → p2 removed from queue entirely
+        - p1 defers → fill_slot pulls p13 → p1 inserted before p14 (first eligible)
+        - p2 says no → p2 removed from queue entirely (was never in queue)
         """
         for i in range(1, 21):  # 20 players: 12 slotted, 8 in queue
             register_and_queue(db, i)

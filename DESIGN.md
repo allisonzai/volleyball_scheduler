@@ -55,7 +55,7 @@ The following rules are taken directly from the specification.
 | R8 | When a player is scheduled, they are notified and have up to 5 minutes (configurable) to respond. |
 | R9 | Responding **yes** marks the player as playing. |
 | R10 | Responding **no** (or not responding within the timeout) removes the player from the current game and from the waiting list entirely. The **first** person in the waiting list who has not already deferred for the current game is notified as replacement. |
-| R11 | Responding **defer** swaps the player with the **first** person in the waiting list who has not already deferred for the current game. That person fills the vacated slot; the deferred player is placed at position 2. |
+| R11 | Responding **defer** swaps the player with the **first** person in the waiting list who has not already deferred for the current game. That person fills the vacated slot; the deferred player is re-inserted into the queue immediately before the next player who has not yet had a slot in this game, preserving their original signup number. |
 | R12 | Confirmation is done by clicking **yes**, **no**, or **defer** in the app. |
 | R13 | Players are displayed as "FirstName L" — duplicates are disambiguated by appending the last 4 digits of their phone number in brackets, e.g. `Alice J [4242]`. |
 | R14 | Every player on the court and waiting list is shown alongside their signup number. |
@@ -359,11 +359,11 @@ if response == "no":
 
 if response == "defer":
     slot.status = DECLINED
-    fill_slot(game)                       # notify first eligible person FIRST  ← key ordering
-    insert player at position 2 in queue  # R11 — behind the new front, ahead of everyone else
+    fill_slot(game)                             # promote first eligible queue player FIRST
+    re-insert player before first eligible      # R11 — preserves original signup_number
 ```
 
-**Why `fill_slot` before insert-at-2 for defer:** `fill_slot` removes the next eligible player from the queue (they fill the vacated slot). Only after that is the deferred player re-inserted at position 2 — directly behind whoever is now first. This prevents the deferred player from being immediately re-drawn for the same game (they have a DECLINED slot so `fill_slot` would skip them anyway, but doing it in this order keeps the queue state clean).
+**Why `fill_slot` before re-insert for defer:** `fill_slot` removes and promotes the first eligible player, updating `game.slots`. Only after that is `already_slotted` rebuilt so the re-insert function can correctly identify which queue entries have already had a slot in this game. The deferred player is placed immediately before the first remaining queue entry that has no slot in this game — i.e., right after any players who have already deferred (and therefore already appear in `already_slotted`). Their original `signup_number` is carried over from their `GameSlot` record.
 
 ### 5.4 Handling a Timeout: `handle_timeout(player_id, game_id, db)`
 
@@ -462,6 +462,8 @@ The `WaitingList` table uses two independent numbers per entry:
 | `position` | Current queue rank (1 = next to play) | **Resequenced** to compact integers after every mutation. |
 
 When a player moves from the queue into a game slot, their `signup_number` is copied onto the `GameSlot` record **before** the `WaitingList` row is deleted. This ensures the number is available for display in the court view and past games history even after the player is no longer in the queue.
+
+When a player **defers** and is re-inserted into the queue, their `signup_number` is read back from their `GameSlot` record and written onto the new `WaitingList` entry. This preserves the original number — a defer does not cause a player to receive a new, higher number.
 
 After every structural change (add, remove, prepend), `_resequence()` renumbers all remaining entries as `1, 2, 3, …N` to prevent gaps.
 
@@ -793,7 +795,7 @@ All configuration is read from environment variables (or a `.env` file) via Pyda
 
 ### 11.1 Test Scope
 
-The test suite (`backend/tests/test_scenarios.py`) contains **88 unit tests** that cover every rule in the specification. Tests run against an in-memory SQLite database with no network calls (notification services are stubbed) and timeouts triggered manually.
+The test suite (`backend/tests/test_scenarios.py`) contains **90 unit tests** that cover every rule in the specification. Tests run against an in-memory SQLite database with no network calls (notification services are stubbed) and timeouts triggered manually.
 
 ### 11.2 Test Structure
 
@@ -811,7 +813,7 @@ Each test class maps to one specification rule:
 | `TestScenario8_ConfigurableTimeout` | R8 — 5-min configurable timeout | 5 |
 | `TestScenario9_ConfirmYes` | R9 — yes marks as playing | 3 |
 | `TestScenario10_ConfirmNo` | R10 — no → end of queue | 4 |
-| `TestScenario11_ConfirmDefer` | R11 — defer swaps player to position 2 | 4 |
+| `TestScenario11_ConfirmDefer` | R11 — defer swaps player to position of first eligible; preserves signup number | 6 |
 | `TestScenario12_ValidResponses` | R12 — case-insensitive responses | 11 |
 | `TestScenario13_DisplayNames` | R13 — display name format (`FirstName L`, brackets) | 5 |
 | `TestScenario14_SignupNumbersVisible` | R14 — signup numbers shown | 3 |

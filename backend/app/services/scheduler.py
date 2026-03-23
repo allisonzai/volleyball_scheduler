@@ -84,22 +84,39 @@ def _append_to_queue(db: Session, player_id: int) -> WaitingList:
     return entry
 
 
-def _insert_at_second(db: Session, player_id: int) -> WaitingList:
-    """Insert player at position 2 (defer swap: next person goes first, deferred player is right behind)."""
-    existing = db.query(WaitingList).filter(WaitingList.player_id == player_id).first()
-    if existing:
-        existing.position = 1.5  # between pos 1 and pos 2; resequence will compact
-        _resequence(db)
-        return existing
+def _insert_before_first_eligible(db: Session, game: Game, player_id: int, signup_number: Optional[int] = None) -> WaitingList:
+    """Re-insert a deferred player at the position vacated by the eligible player
+    that fill_slot just promoted into the game.  Concretely: insert immediately
+    before the first queue entry whose player has no slot in this game (i.e. has
+    not yet deferred for this game).  Players who already have a slot stay ahead
+    of the re-inserted player.  Preserves the original signup_number."""
+    already_slotted = {s.player_id for s in game.slots}
+    queue = get_queue(db)
 
-    # Shift everyone at position >= 2 down to make room
-    db.query(WaitingList).filter(WaitingList.position >= 2).update(
+    first_eligible = next((e for e in queue if e.player_id not in already_slotted), None)
+
+    if first_eligible is None:
+        # Everyone remaining in the queue already has a slot — append to end
+        max_pos = db.query(func.max(WaitingList.position)).scalar() or 0
+        entry = WaitingList(
+            player_id=player_id,
+            signup_number=signup_number or _next_signup_number(db),
+            position=max_pos + 1,
+        )
+        db.add(entry)
+        db.flush()
+        _resequence(db)
+        return entry
+
+    # Shift entries at first_eligible.position and beyond to make room
+    target_pos = first_eligible.position
+    db.query(WaitingList).filter(WaitingList.position >= target_pos).update(
         {WaitingList.position: WaitingList.position + 1}
     )
     entry = WaitingList(
         player_id=player_id,
-        signup_number=_next_signup_number(db),
-        position=2,
+        signup_number=signup_number or _next_signup_number(db),
+        position=target_pos,
     )
     db.add(entry)
     db.flush()
@@ -339,12 +356,13 @@ def handle_confirmation(player_id: int, game_id: int, response: str, db: Session
     elif response == "defer":
         slot.status = SlotStatus.DECLINED
         db.flush()
-        # Fill the slot first (removes the next queue player, so they won't be
-        # double-inserted), then place the deferred player at position 2 —
-        # they swap with the person who just filled their slot.
+        # fill_slot promotes the first eligible queue player into the vacated slot
+        # (and calls db.expire(game) so game.slots reloads on next access).
+        # Then re-insert the deferred player right before the next eligible queue
+        # entry, preserving their original signup_number.
         fill_slot(db, game)
-        _insert_at_second(db, player_id)
-        logger.info(f"Player {player_id} deferred game {game_id} — swapped with next player in queue.")
+        _insert_before_first_eligible(db, game, player_id, slot.signup_number)
+        logger.info(f"Player {player_id} deferred game {game_id} — swapped with first eligible queue player.")
 
 
 def handle_timeout(player_id: int, game_id: int, db: Session) -> None:
