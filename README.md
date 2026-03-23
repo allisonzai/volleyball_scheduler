@@ -146,7 +146,7 @@ EXPO_PUBLIC_API_URL=http://192.168.1.100:8000 npx expo start
    - **no** → removed from queue entirely; first eligible player (not already deferred) notified
    - **defer** → first eligible player fills the slot; deferred player re-inserted before next non-deferred queue entry, original signup number preserved
    - *(no response)* → treated as **no**: removed from queue entirely
-5. Game starts when all pending slots are resolved.
+5. Once all pending slots resolve, missing spots are batch-filled from the queue (even if none confirmed yet). Game starts when at least one player confirms and the queue is exhausted.
 6. When the game ends, confirmed court players rotate to the end of the queue.
 7. Operator clicks **Start New Game** to begin the next round.
 
@@ -168,4 +168,4 @@ cd backend
 PYTHONPATH=. pytest tests/test_scenarios.py -v
 ```
 
-90 scenario-driven tests covering all spec requirements.
+91 scenario-driven tests covering all spec requirements.

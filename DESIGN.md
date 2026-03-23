@@ -257,7 +257,7 @@ volleyball_scheduler/
          assign_next_game()
 NONE ──────────────────────────► OPEN
                                    │
-         all slots confirmed        │  or queue exhausted (fill_slot returns False)
+         all slots confirmed        │  or queue exhausted with ≥1 confirmed
            ──────────────────────► IN_PROGRESS
                                        │
                   end_game()           │
@@ -349,19 +349,41 @@ slot.responded_at = now()
 
 if response == "yes":
     slot.status = CONFIRMED
-    if _pending_count(game) == 0 and _confirmed_count(game) > 0:
-        game.status = IN_PROGRESS
+    _try_fill_open_slots(db, game)        # may start game or batch-fill if all pending resolved
 
 if response == "no":
     slot.status = DECLINED
     remove player from queue entirely     # R10 — they leave the system
-    fill_slot(game)                       # notify first eligible person (not already deferred)
+    _try_fill_open_slots(db, game)        # batch-fill once all pending resolve
 
 if response == "defer":
     slot.status = DECLINED
     fill_slot(game)                             # promote first eligible queue player FIRST
     re-insert player before first eligible      # R11 — preserves original signup_number
 ```
+
+**`_try_fill_open_slots(db, game)` — batch fill logic:**
+
+Called by both "yes" and "no"/"timeout" paths after each slot resolves.
+
+```
+if pending_count > 0:
+    return  # still waiting for outstanding responses
+
+needed = max_players - confirmed_count
+
+if needed <= 0:
+    game.status → IN_PROGRESS   # full house
+
+else:
+    for _ in range(needed):
+        if not fill_slot(game):
+            break               # queue exhausted; fill_slot starts game if confirmed > 0
+```
+
+Key design: the `confirmed == 0` check was intentionally **removed**. If every player in the initial group times out (confirmed = 0), batch fill still runs so that queue players get their turn. Those new players will confirm or decline; the game starts once at least one of them confirms yes. If the queue is also empty and confirmed = 0, the game remains in OPEN state until the operator clicks Start Over.
+
+---
 
 **Why `fill_slot` before re-insert for defer:** `fill_slot` removes and promotes the first eligible player, updating `game.slots`. Only after that is `already_slotted` rebuilt so the re-insert function can correctly identify which queue entries have already had a slot in this game. The deferred player is placed immediately before the first remaining queue entry that has no slot in this game — i.e., right after any players who have already deferred (and therefore already appear in `already_slotted`). Their original `signup_number` is carried over from their `GameSlot` record.
 
@@ -374,7 +396,7 @@ if slot.status != PENDING_CONFIRMATION:
     return   # already responded; ignore late fire
 
 handle_confirmation(player_id, game_id, "no", db)
-# → slot.status = DECLINED, player removed from queue entirely, fill_slot called
+# → slot.status = DECLINED, player removed from queue, _try_fill_open_slots called
 ```
 
 ### 5.5 Ending a Game: `end_game(game_id, db)`
@@ -795,7 +817,7 @@ All configuration is read from environment variables (or a `.env` file) via Pyda
 
 ### 11.1 Test Scope
 
-The test suite (`backend/tests/test_scenarios.py`) contains **90 unit tests** that cover every rule in the specification. Tests run against an in-memory SQLite database with no network calls (notification services are stubbed) and timeouts triggered manually.
+The test suite (`backend/tests/test_scenarios.py`) contains **91 unit tests** that cover every rule in the specification. Tests run against an in-memory SQLite database with no network calls (notification services are stubbed) and timeouts triggered manually.
 
 ### 11.2 Test Structure
 
@@ -812,7 +834,7 @@ Each test class maps to one specification rule:
 | `TestScenario7_LeaveWaitingList` | R7 — leave queue at any time | 5 |
 | `TestScenario8_ConfigurableTimeout` | R8 — 5-min configurable timeout | 5 |
 | `TestScenario9_ConfirmYes` | R9 — yes marks as playing | 3 |
-| `TestScenario10_ConfirmNo` | R10 — no → end of queue | 4 |
+| `TestScenario10_ConfirmNo` | R10 — no → end of queue | 5 |
 | `TestScenario11_ConfirmDefer` | R11 — defer swaps player to position of first eligible; preserves signup number | 6 |
 | `TestScenario12_ValidResponses` | R12 — case-insensitive responses | 11 |
 | `TestScenario13_DisplayNames` | R13 — display name format (`FirstName L`, brackets) | 5 |
@@ -839,6 +861,8 @@ pytest tests/test_scenarios.py -v
 **Manual timeout triggering.** Since tests should not fire real `threading.Timer` callbacks, the `db` fixture calls `scheduler._timeout_tasks.clear()` before each test. Tests that verify timeout behaviour call `scheduler.handle_timeout()` directly, bypassing the timer entirely.
 
 **Chain-of-declines edge case.** When all backup players decline, the game starts with only the confirmed players. The test verifies this by triggering a third decline when only one backup player exists, causing the queue to be exhausted and the game to start with one confirmed player.
+
+**All-timeout batch fill.** When every notified player times out (confirmed = 0) but the queue has remaining players, `_try_fill_open_slots` must still run. The `confirmed == 0` early-return guard was removed to ensure queue players always get their chance to confirm — the game only remains in OPEN state (never starts) if both confirmed = 0 and the queue is empty.
 
 ---
 

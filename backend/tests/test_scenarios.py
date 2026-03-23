@@ -667,6 +667,39 @@ class TestScenario10_ConfirmNo:
             "Replacement player should be notified after all pending slots resolve"
         )
 
+    def test_batch_fill_runs_even_when_no_one_confirmed(self, db):
+        """If all 12 slots time out (confirmed=0) but the queue has players,
+        batch fill should still pull all eligible players — not skip because
+        confirmed==0."""
+        # 17 players: 12 slotted (p1-p12), 5 in queue (p13-p17)
+        for i in range(1, 18):
+            register_and_queue(db, i)
+        game = scheduler.assign_next_game(db)
+        db.commit()
+
+        # p1 defers → p13 gets slot; p1 re-inserted before p14
+        p1_id = game.slots[0].player_id
+        scheduler.handle_confirmation(p1_id, game.id, "defer", db)
+        db.commit()
+
+        # Now 12 pending (p2-p12 + p13). All time out.
+        db.refresh(game)
+        for slot in list(game.slots):
+            if slot.status == SlotStatus.PENDING_CONFIRMATION:
+                scheduler.handle_timeout(slot.player_id, game.id, db)
+        db.commit()
+
+        db.refresh(game)
+        # confirmed=0, but p14-p17 should have been batch-filled (p1 is in
+        # already_slotted so skipped; p14-p17 are the 4 eligible queue players)
+        pending_ids = {s.player_id for s in game.slots if s.status == SlotStatus.PENDING_CONFIRMATION}
+        assert len(pending_ids) == 4, (
+            f"Expected 4 replacement players notified, got {len(pending_ids)}"
+        )
+        # p1 should still be in queue (was skipped as already_slotted)
+        queue_ids = {e.player_id for e in scheduler.get_queue(db)}
+        assert p1_id in queue_ids, "p1 (deferred) should remain in queue"
+
     def test_no_with_empty_queue_does_not_crash(self, db):
         """If queue is empty when someone says no, game starts with whoever confirmed."""
         for i in range(1, 13):

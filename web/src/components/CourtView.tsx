@@ -82,9 +82,15 @@ export default function CourtView({ game, currentPlayerId, currentPlayer, onRefr
           </h3>
           <div className="grid grid-cols-2 gap-2">
             {pending.map((slot) => (
-              <div key={slot.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-yellow-50 border border-yellow-200">
-                <span className="text-sm text-gray-700">{slot.display_name}</span>
-                <span className="text-xs text-yellow-500 ml-auto animate-pulse">waiting…</span>
+              <div key={slot.id} className="flex items-center gap-2">
+                <div className="flex-1">
+                  <PlayerBadge
+                    displayName={slot.display_name}
+                    signupNumber={slot.signup_number}
+                    highlight={slot.player_id === currentPlayerId}
+                  />
+                </div>
+                <span className="text-xs text-yellow-500 animate-pulse">waiting…</span>
               </div>
             ))}
           </div>

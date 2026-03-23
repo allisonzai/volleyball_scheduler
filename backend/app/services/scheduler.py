@@ -227,16 +227,16 @@ def _create_slot_and_notify(db: Session, game: Game, player_id: int, signup_numb
 
 def _try_fill_open_slots(db: Session, game: Game) -> None:
     """Called after any slot resolves. Once no slots remain pending, batch-fill
-    missing spots from the queue — or start the game if the queue is exhausted."""
+    missing spots from the queue — or start the game if the queue is exhausted.
+    Fills even when confirmed == 0: the batch players are the ones who will
+    confirm, so we must give them a chance before deciding the game can't start."""
     db.expire(game)
     if _pending_count(game) > 0:
         return  # still waiting for outstanding responses
 
     confirmed = _confirmed_count(game)
-    if confirmed == 0:
-        return  # no one confirmed — game will not start
-
     needed = game.max_players - confirmed
+
     if needed <= 0:
         # Full house of confirmed players — start the game
         if game.status == GameStatus.OPEN:
@@ -246,10 +246,11 @@ def _try_fill_open_slots(db: Session, game: Game) -> None:
         return
 
     # Batch-fill: pull up to `needed` replacements from the queue at once.
-    # fill_slot handles the IN_PROGRESS transition when the queue runs dry.
+    # fill_slot handles the IN_PROGRESS transition when the queue runs dry
+    # (only if confirmed > 0 at that point).
     for _ in range(needed):
         if not fill_slot(db, game):
-            break  # queue exhausted; fill_slot already transitioned game if needed
+            break  # queue exhausted
         db.expire(game)
 
 
