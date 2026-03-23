@@ -724,20 +724,23 @@ backend on port 8000.
 
 ```
 ┌────────────────────────────────────┐
-│  🏐 Volleyball Scheduler     Alice S. │  ← Header (sticky)
+│  🏐 Volleyball Scheduler  🕐12:34:05  Alice S. │  ← Header (sticky, wall clock always visible)
 ├────────────────────────────────────┤
 │                                    │
 │  ┌─────────────────────────────┐   │
-│  │  🏐 You're up for Game #3!  │   │  ← Confirmation banner
-│  │  [Yes] [No] [Defer]         │   │     (visible only when player
-│  └─────────────────────────────┘   │      has a pending slot)
-│                                    │
+│  │  🏐 You're up for Game #3!  │   │  ← Confirmation banner (visible
+│  │  [Yes] [No] [Defer]  4:32   │   │     only when player has a
+│  └─────────────────────────────┘   │     pending slot); MM:SS countdown
+│                                    │     turns red/pulses under 60 s
 │  [ Live ] [ Past Games ]           │  ← Tab nav
 │                                    │
 │  ┌─────────────────────────────┐   │
 │  │  Current Game #3            │   │
 │  │  On Court (12/12)           │   │  ← CourtView
 │  │  Alice S.  Bob J.  …        │   │
+│  │  Awaiting Confirmation (2)  │   │
+│  │  Carol D. 🕐 4:32           │   │  ← clock + MM:SS per pending slot,
+│  │  Dave M.  🕐 3:51           │   │     red/pulsing under 60 s
 │  └─────────────────────────────┘   │
 │                                    │
 │  ┌─────────────────────────────┐   │

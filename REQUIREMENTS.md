@@ -245,8 +245,11 @@ testing.
   sections with signup numbers), the full waiting list (with signup numbers),
   and past games.
 - A **QR code** sharing the page URL is available in the header.
-- A **countdown timer** (MM:SS) is shown on the confirmation banner, turning red
-  and pulsing under 60 seconds.
+- A **live wall clock** (HH:MM:SS) is always visible in the header, ticking
+  every second.
+- A **countdown timer** (MM:SS) is shown on the confirmation banner and next to
+  each player in the "Awaiting Confirmation" section, turning red and pulsing
+  under 60 seconds.
 - Operator controls are embedded on the same page (visible to anyone who knows
   the operator secret, which is baked into the build).
 
