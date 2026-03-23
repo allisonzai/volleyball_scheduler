@@ -457,7 +457,7 @@ def leave_game(player_id: int, game_id: int, db: Session) -> None:
     slot.responded_at = datetime.utcnow()
     db.flush()
 
-    _append_to_queue(db, player_id)
+    _remove_from_queue(db, player_id)
     fill_slot(db, game)
     logger.info(f"Player {player_id} withdrew from game {game_id} mid-play.")
     broadcast_update("game_update")

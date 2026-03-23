@@ -931,7 +931,7 @@ class TestScenario15_LeaveGameMidPlay:
         ).first()
         assert slot.status == SlotStatus.WITHDRAWN, "Slot should be WITHDRAWN after leaving"
 
-    def test_leave_game_moves_player_to_end_of_queue(self, db):
+    def test_leave_game_removes_player_from_queue(self, db):
         for i in range(1, 13):
             register_and_queue(db, i)
         game = scheduler.assign_next_game(db)
@@ -945,8 +945,7 @@ class TestScenario15_LeaveGameMidPlay:
 
         queue = scheduler.get_queue(db)
         queued_ids = [e.player_id for e in queue]
-        assert target_id in queued_ids, "Player who left should be back in queue"
-        assert queued_ids[-1] == target_id, "Player who left should be at END of queue"
+        assert target_id not in queued_ids, "Player who left mid-game should NOT be in queue"
 
     def test_leave_game_fills_slot_from_queue(self, db):
         """When a player leaves and there is someone in the waiting list, that person
