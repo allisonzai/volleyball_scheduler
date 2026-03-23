@@ -257,29 +257,11 @@ def assign_next_game(db: Session) -> Optional[Game]:
     db.add(game)
     db.flush()
 
-    if len(queue) <= settings.MAX_PLAYERS:
-        # Everyone plays immediately — no confirmation needed
-        for i, entry in enumerate(queue, start=1):
-            slot = GameSlot(
-                game_id=game.id,
-                player_id=entry.player_id,
-                position=i,
-                status=SlotStatus.CONFIRMED,
-                notified_at=datetime.utcnow(),
-                responded_at=datetime.utcnow(),
-            )
-            db.add(slot)
-        db.query(WaitingList).delete()
-        game.status = GameStatus.IN_PROGRESS
-        game.started_at = datetime.utcnow()
-        db.flush()
-        logger.info(f"Game {game.id} started immediately with {len(queue)} players.")
-    else:
-        # Notify first MAX_PLAYERS one-by-one (chain: each response triggers the next)
-        candidates = queue[: settings.MAX_PLAYERS]
-        for entry in candidates:
-            _remove_from_queue(db, entry.player_id)
-            _create_slot_and_notify(db, game, entry.player_id)
+    # Always notify players and require confirmation, regardless of queue size
+    candidates = queue[: settings.MAX_PLAYERS]
+    for entry in candidates:
+        _remove_from_queue(db, entry.player_id)
+        _create_slot_and_notify(db, game, entry.player_id)
 
     # Expire and reload so the returned game object has a current .slots collection
     db.expire(game)

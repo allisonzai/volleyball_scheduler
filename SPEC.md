@@ -17,8 +17,9 @@
 5.  Once a game is completed the players on the court will be added
     to the waiting list and the first 12 players will play the next
     game.
-6.  If the number of the players is less than or equal to 12, we
-    don't need to schedule the game because everyone can play.
+6.  If the number of the players is less than or equal to 12,
+    everyone can play — but confirmation is still required from
+    each player before the game starts.
 7.  Any player is allowed to leave while they are in the waiting
     list.
 7a. A confirmed player may leave an active game at any time. They
@@ -34,11 +35,11 @@
 10. If they confirm **yes**, they are marked as playing.
 11. If they confirm **no** (or do not respond within the timeout),
     they will be taken out of the current game and not be added to
-    the waiting list. The next person in the waiting list who has
+    the waiting list. The first person in the waiting list who has
     not already deferred for the current game will be selected as a
     replacement.
 12. If they confirm **defer**, they will be taken out of the current
-    game and swapped with the next person in the waiting list who
+    game and swapped with the first person in the waiting list who
     has not already deferred for the current game.
 13. Confirmation is done by clicking the corresponding button in the
     app.

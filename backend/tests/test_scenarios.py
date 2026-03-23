@@ -360,27 +360,31 @@ class TestScenario5_GameRotation:
 
 
 # ── SCENARIO 6 ───────────────────────────────────────────────────────────────
-# "If the number of the players is less than or equal to 12, we don't need to
-#  schedule the game because everyone can play"
+# "If the number of the players is less than or equal to 12, everyone can play
+#  — but confirmation is still required from each player."
 
 class TestScenario6_AtMost12Players:
     @pytest.mark.parametrize("n", [1, 6, 11, 12])
-    def test_everyone_plays_immediately_when_12_or_fewer(self, db, n):
-        for i in range(1, n + 1):
-            register_and_queue(db, i)
+    def test_all_players_notified_when_12_or_fewer(self, db, n):
+        players = [register_and_queue(db, i) for i in range(1, n + 1)]
         db.commit()
 
         game = scheduler.assign_next_game(db)
         db.commit()
 
-        assert game.status == GameStatus.IN_PROGRESS, (
-            f"With {n} players game should start immediately (no confirmation needed)"
+        pending = [s for s in game.slots if s.status == SlotStatus.PENDING_CONFIRMATION]
+        assert len(pending) == n, (
+            f"With {n} players all should be pending confirmation"
         )
+        assert game.status == GameStatus.OPEN
 
-        confirmed = [s for s in game.slots if s.status == SlotStatus.CONFIRMED]
-        assert len(confirmed) == n, (
-            f"All {n} players should be confirmed automatically"
-        )
+        # Game starts once all confirm yes
+        players_by_id = {p.id: p for p in players}
+        for slot in game.slots:
+            scheduler.handle_confirmation(slot.player_id, game.id, "yes", db)
+        db.commit()
+        db.refresh(game)
+        assert game.status == GameStatus.IN_PROGRESS
 
     def test_no_players_left_in_queue_when_all_fit(self, db):
         for i in range(1, 9):
@@ -391,9 +395,9 @@ class TestScenario6_AtMost12Players:
         db.commit()
 
         queue = scheduler.get_queue(db)
-        assert len(queue) == 0, "Queue should be empty when everyone fits"
+        assert len(queue) == 0, "Queue should be empty when everyone is pulled for the game"
 
-    def test_exactly_12_players_no_confirmation_needed(self, db):
+    def test_exactly_12_players_all_pending(self, db):
         for i in range(1, 13):
             register_and_queue(db, i)
         db.commit()
@@ -402,10 +406,8 @@ class TestScenario6_AtMost12Players:
         db.commit()
 
         pending = [s for s in game.slots if s.status == SlotStatus.PENDING_CONFIRMATION]
-        assert len(pending) == 0, (
-            "No pending confirmations when exactly 12 players are in queue"
-        )
-        assert game.status == GameStatus.IN_PROGRESS
+        assert len(pending) == 12, "All 12 players should be pending confirmation"
+        assert game.status == GameStatus.OPEN
 
 
 # ── SCENARIO 7 ───────────────────────────────────────────────────────────────
@@ -642,16 +644,21 @@ class TestScenario10_ConfirmNo:
         )
 
     def test_no_with_empty_queue_does_not_crash(self, db):
-        """If queue is empty when someone says no, game still proceeds with confirmed players."""
+        """If queue is empty when someone says no, game starts with whoever confirmed."""
         for i in range(1, 13):
             register_and_queue(db, i)
 
-        # Only 12 players — game starts immediately, no confirmation needed
         game = scheduler.assign_next_game(db)
         db.commit()
 
+        # All 12 are pending; p1 says no — queue is empty so game starts with remaining confirmers
+        target_id = game.slots[0].player_id
+        scheduler.handle_confirmation(target_id, game.id, "no", db)
+        for slot in game.slots[1:]:
+            scheduler.handle_confirmation(slot.player_id, game.id, "yes", db)
+        db.commit()
+        db.refresh(game)
         assert game.status == GameStatus.IN_PROGRESS
-        # No pending slots to decline — this is the ≤12 path, all auto-confirmed
 
 
 # ── SCENARIO 11 ──────────────────────────────────────────────────────────────
@@ -869,13 +876,19 @@ class TestEdgeCases:
         assert result is None, "assign_next_game should return None when queue is empty"
 
     def test_single_player_game(self, db):
-        register_and_queue(db, 1)
+        p = register_and_queue(db, 1)
         game = scheduler.assign_next_game(db)
         db.commit()
 
         assert game is not None
-        assert game.status == GameStatus.IN_PROGRESS
+        assert game.status == GameStatus.OPEN
         assert len(game.slots) == 1
+        assert game.slots[0].status == SlotStatus.PENDING_CONFIRMATION
+
+        scheduler.handle_confirmation(p.id, game.id, "yes", db)
+        db.commit()
+        db.refresh(game)
+        assert game.status == GameStatus.IN_PROGRESS
 
     def test_chain_of_all_declines_exhausts_queue(self, db):
         """When all backup players are exhausted, the game starts with whoever confirmed.
@@ -916,11 +929,16 @@ class TestEdgeCases:
         game = scheduler.assign_next_game(db)
         db.commit()
 
-        assert game.status == GameStatus.IN_PROGRESS  # ≤12 starts immediately
+        assert game.status == GameStatus.OPEN  # all 12 pending confirmation
+
+        for slot in game.slots:
+            scheduler.handle_confirmation(slot.player_id, game.id, "yes", db)
+        db.commit()
+        db.refresh(game)
+        assert game.status == GameStatus.IN_PROGRESS
 
         scheduler.end_game(game.id, db)
         db.commit()
-
         db.refresh(game)
         assert game.status == GameStatus.FINISHED
 
