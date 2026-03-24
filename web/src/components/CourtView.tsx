@@ -66,7 +66,10 @@ export default function CourtView({ game, currentPlayerId, currentPlayer, timeou
   const slots = Array.isArray(game.slots) ? game.slots : [];
   const confirmed = slots.filter((s) => s.status === "confirmed");
   const pending = slots.filter((s) => s.status === "pending_confirmation");
-  const statusInfo = STATUS_LABELS[game.status] ?? { label: game.status, color: "text-gray-500" };
+  const statusInfo =
+    game.status === "open" && pending.length === 0
+      ? { label: "Waiting for players…", color: "text-gray-400" }
+      : STATUS_LABELS[game.status] ?? { label: game.status, color: "text-gray-500" };
 
   return (
     <div className="bg-white rounded-2xl shadow p-6">
