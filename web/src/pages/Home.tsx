@@ -173,8 +173,13 @@ export default function Home() {
               </svg>
             </button>
           </div>
-          <div className="bg-gray-900 text-green-400 font-mono text-sm font-bold px-3 py-1 rounded-lg tracking-widest tabular-nums shadow-inner border border-gray-700 select-none">
-            {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
+          <div className="relative bg-gray-950 px-3 py-1 rounded-lg shadow-inner border border-gray-700 select-none overflow-hidden">
+            <span className="dseg7 text-gray-800 text-lg absolute inset-0 flex items-center justify-center px-3 pointer-events-none">
+              88:88:88
+            </span>
+            <span className="dseg7 text-green-400 text-lg relative" style={{ textShadow: "0 0 8px #4ade80, 0 0 2px #4ade80" }}>
+              {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
+            </span>
           </div>
           {player ? (
             <div className="flex items-center gap-2">
