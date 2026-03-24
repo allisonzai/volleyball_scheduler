@@ -274,20 +274,18 @@ export default function Home() {
             {/* Operator controls */}
             <div className="border-t border-dashed border-gray-200 pt-4">
               <p className="text-xs text-gray-400 mb-2 text-center">Operator Controls</p>
-              <div className="flex flex-wrap items-center gap-2 mb-2">
-                <label className="text-xs text-gray-500 whitespace-nowrap">Confirm timeout</label>
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <label className="text-xs text-gray-500 whitespace-nowrap">Timeout</label>
                 <input
                   type="number"
                   min="0.5"
                   step="0.5"
                   value={timeoutInput}
                   onChange={(e) => setTimeoutInput(e.target.value)}
-                  className="w-16 text-sm border border-gray-300 rounded-lg px-2 py-1 text-center"
+                  className="w-14 text-sm border border-gray-300 rounded-lg px-2 py-1 text-center"
                 />
                 <span className="text-xs text-gray-500">min</span>
-                <span className="text-xs text-gray-400">(now: {Math.round((timeoutSeconds / 60) * 10) / 10} min)</span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <span className="text-xs text-gray-300">|</span>
                 <label className="text-xs text-gray-500 whitespace-nowrap">Fill wait</label>
                 <input
                   type="number"
@@ -295,10 +293,9 @@ export default function Home() {
                   step="0.5"
                   value={fillWaitInput}
                   onChange={(e) => setFillWaitInput(e.target.value)}
-                  className="w-16 text-sm border border-gray-300 rounded-lg px-2 py-1 text-center"
+                  className="w-14 text-sm border border-gray-300 rounded-lg px-2 py-1 text-center"
                 />
                 <span className="text-xs text-gray-500">min</span>
-                <span className="text-xs text-gray-400">(now: {Math.round((fillWaitSeconds / 60) * 10) / 10} min)</span>
                 <button
                   onClick={handleSaveTimeout}
                   className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-lg border border-gray-300 transition"
