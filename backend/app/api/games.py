@@ -36,6 +36,7 @@ def _game_to_schema(game: Game, db: Session) -> GameOut:
     slots = [_slot_to_schema(slot) for slot in sorted(game.slots, key=lambda s: s.position)]
     return GameOut(
         id=game.id,
+        game_number=game.game_number,
         status=game.status,
         max_players=game.max_players,
         started_at=game.started_at,

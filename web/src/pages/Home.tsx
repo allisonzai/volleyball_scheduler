@@ -117,7 +117,7 @@ export default function Home() {
 
   const handleEnd = async () => {
     if (!game) return;
-    if (!confirm(`End game #${game.game_number}?`)) return;
+    if (!confirm(`End game #${game.game_number ?? game.id}?`)) return;
     try {
       await endGame(game.id, operatorSecret);
       refresh();

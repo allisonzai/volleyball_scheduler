@@ -296,7 +296,7 @@ def _try_fill_open_slots(db: Session, game: Game) -> None:
     # Use allow_requeue=True so deferred players who were re-inserted into the
     # queue are eligible — their DECLINED slot no longer blocks them.
     for _ in range(needed):
-        if not fill_slot(db, game, allow_requeue=True):
+        if not fill_slot(db, game, allow_requeue=True, apply_fill_wait=False):
             break  # queue exhausted
         db.expire(game)
 
@@ -341,7 +341,7 @@ def _apply_fill_wait(
     )
 
 
-def fill_slot(db: Session, game: Game, allow_requeue: bool = False) -> bool:
+def fill_slot(db: Session, game: Game, allow_requeue: bool = False, apply_fill_wait: bool = True) -> bool:
     """Pull the next eligible player from the queue and assign them to the game.
     Returns True if a player was found, False if no eligible player exists.
 
@@ -392,7 +392,7 @@ def fill_slot(db: Session, game: Game, allow_requeue: bool = False) -> bool:
         game_id=game.id, game_number=game.game_number,
     )
 
-    if existing_pending:
+    if existing_pending and apply_fill_wait:
         _apply_fill_wait(db, game, new_slot, existing_pending)
 
     return True

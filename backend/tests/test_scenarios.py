@@ -1578,6 +1578,41 @@ class TestScenario20_FillWait:
             "fill_wait must not apply during batch fill"
         )
 
+    def test_fill_wait_not_applied_during_multi_slot_batch_fill(self, db):
+        """When batch fill needs to pull multiple players (e.g. 4 from queue),
+        fill_wait must NOT be applied for any of the fills — not even fills 2, 3, 4
+        which happen while fills 1, 2, 3 are already pending."""
+        settings.MAX_PLAYERS = 12
+        settings.CONFIRM_TIMEOUT_SECONDS = 300
+        settings.FILL_WAIT_SECONDS = 60
+
+        # 16 players: 12 initial slots, 4 in queue
+        for i in range(1, 17):
+            register_and_queue(db, i)
+
+        game = scheduler.assign_next_game(db)
+        db.commit()
+
+        # p1 confirms, p2-p12 all decline
+        scheduler.handle_confirmation(game.slots[0].player_id, game.id, "yes", db)
+        for slot in list(game.slots[1:]):
+            scheduler.handle_confirmation(slot.player_id, game.id, "no", db)
+        db.commit()
+        db.refresh(game)
+
+        # Game should be IN_PROGRESS with a valid game_number
+        assert game.status == GameStatus.IN_PROGRESS, (
+            f"Game should be IN_PROGRESS after all timeouts; got {game.status}"
+        )
+        assert game.game_number is not None, (
+            "game_number must be assigned when game becomes IN_PROGRESS"
+        )
+        # CONFIRM_TIMEOUT_SECONDS must not have been inflated by batch fills
+        assert settings.CONFIRM_TIMEOUT_SECONDS == 300, (
+            f"fill_wait must not apply during batch fill; "
+            f"timeout grew to {settings.CONFIRM_TIMEOUT_SECONDS}s"
+        )
+
     def test_fill_wait_zero_leaves_timeout_unchanged(self, db):
         """When FILL_WAIT_SECONDS=0, timeout does not change on fill."""
         settings.MAX_PLAYERS = 2
