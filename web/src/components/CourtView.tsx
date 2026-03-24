@@ -67,10 +67,25 @@ export default function CourtView({ game, currentPlayerId, currentPlayer, timeou
   const slots = Array.isArray(game.slots) ? game.slots : [];
   const confirmed = slots.filter((s) => s.status === "confirmed");
   const pending = slots.filter((s) => s.status === "pending_confirmation");
+
+  // During confirmation phase (OPEN), merge confirmed + pending so everyone
+  // is visible together: confirmed slots show ✓, pending slots show timer.
+  const isConfirming = game.status === "open";
+  const awaitingSlots = isConfirming ? [...confirmed, ...pending] : [];
+  const courtSlots = isConfirming ? [] : confirmed;
+
   const statusInfo =
     game.status === "open" && pending.length === 0
       ? { label: "Waiting for players…", color: "text-gray-400" }
       : STATUS_LABELS[game.status] ?? { label: game.status, color: "text-gray-500" };
+
+  const Checkmark = () => (
+    <span className="text-green-500 shrink-0">
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="20 6 9 17 4 12" />
+      </svg>
+    </span>
+  );
 
   return (
     <div className="bg-white rounded-2xl shadow p-6">
@@ -79,13 +94,46 @@ export default function CourtView({ game, currentPlayerId, currentPlayer, timeou
         <span className={`text-sm font-medium ${statusInfo.color}`}>{statusInfo.label}</span>
       </div>
 
-      {confirmed.length > 0 && (
+      {/* Confirmation phase: all slots together, confirmed ✓ / pending timer */}
+      {awaitingSlots.length > 0 && (
         <div className="mb-4">
-          <h3 className="text-xs uppercase tracking-wide text-gray-500 mb-2">
-            On Court ({confirmed.length}/{game.max_players})
+          <h3 className="text-xs uppercase tracking-wide text-yellow-500 mb-2">
+            Awaiting Confirmation ({confirmed.length}/{game.max_players} confirmed)
           </h3>
           <div className="grid grid-cols-2 gap-2">
-            {confirmed.map((slot) => (
+            {awaitingSlots.map((slot) => {
+              const isConfirmed =
+                slot.status === "confirmed" ||
+                (slot.player_id === currentPlayerId && currentPlayerResponse === "yes");
+              return (
+                <div key={slot.id} className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <PlayerBadge
+                      displayName={slot.display_name}
+                      signupNumber={slot.signup_number}
+                      highlight={slot.player_id === currentPlayerId}
+                    />
+                  </div>
+                  {isConfirmed ? (
+                    <Checkmark />
+                  ) : (
+                    <SlotTimer slot={slot} timeoutSeconds={timeoutSeconds} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Game in progress: show confirmed players on court */}
+      {courtSlots.length > 0 && (
+        <div className="mb-4">
+          <h3 className="text-xs uppercase tracking-wide text-gray-500 mb-2">
+            On Court ({courtSlots.length}/{game.max_players})
+          </h3>
+          <div className="grid grid-cols-2 gap-2">
+            {courtSlots.map((slot) => (
               <div key={slot.id} className="flex items-center gap-2">
                 <div className="flex-1">
                   <PlayerBadge
@@ -101,36 +149,6 @@ export default function CourtView({ game, currentPlayerId, currentPlayer, timeou
                   >
                     Leave
                   </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {pending.length > 0 && (
-        <div>
-          <h3 className="text-xs uppercase tracking-wide text-yellow-500 mb-2">
-            Awaiting Confirmation ({pending.length})
-          </h3>
-          <div className="grid grid-cols-2 gap-2">
-            {pending.map((slot) => (
-              <div key={slot.id} className="flex items-center gap-2">
-                <div className="flex-1">
-                  <PlayerBadge
-                    displayName={slot.display_name}
-                    signupNumber={slot.signup_number}
-                    highlight={slot.player_id === currentPlayerId}
-                  />
-                </div>
-                {slot.player_id === currentPlayerId && currentPlayerResponse === "yes" ? (
-                  <span className="text-green-500">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  </span>
-                ) : (
-                  <SlotTimer slot={slot} timeoutSeconds={timeoutSeconds} />
                 )}
               </div>
             ))}
