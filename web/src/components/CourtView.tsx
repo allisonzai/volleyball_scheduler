@@ -100,7 +100,7 @@ export default function CourtView({ game, currentPlayerId, currentPlayer, timeou
       {awaitingSlots.length > 0 && (
         <div className="mb-4">
           <h3 className="text-xs uppercase tracking-wide text-yellow-500 mb-2">
-            Awaiting Confirmation ({confirmed.length}/{game.max_players} confirmed)
+            Awaiting Confirmation ({confirmed.length}/{awaitingSlots.length} confirmed)
           </h3>
           <div className="grid grid-cols-2 gap-2">
             {awaitingSlots.map((slot) => {
