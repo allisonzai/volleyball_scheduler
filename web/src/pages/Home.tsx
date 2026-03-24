@@ -29,13 +29,7 @@ export default function Home() {
   const [playerResponse, setPlayerResponse] = useState<"yes" | "no" | "defer" | null>(null);
   const [timeoutInput, setTimeoutInput] = useState("5");
   const [fillWaitInput, setFillWaitInput] = useState("1");
-  const [now, setNow] = useState(new Date());
   const pageUrl = window.location.href;
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
 
   useEffect(() => {
     setTimeoutInput(String(Math.round((timeoutSeconds / 60) * 10) / 10));
@@ -108,7 +102,7 @@ export default function Home() {
 
   const handleBegin = async () => {
     if (!game) return;
-    if (!confirm(`Begin game #${game.id} now? Unconfirmed players will be removed.`)) return;
+    if (!confirm("Begin game now? Unconfirmed players will be removed.")) return;
     try {
       await beginGame(game.id, operatorSecret);
       refresh();
@@ -172,14 +166,6 @@ export default function Home() {
                 <rect x="18" y="18" width="3" height="3" />
               </svg>
             </button>
-          </div>
-          <div className="relative bg-gray-950 px-3 py-1 rounded-lg shadow-inner border border-gray-700 select-none overflow-hidden">
-            <span className="dseg7 text-gray-800 text-lg absolute inset-0 flex items-center justify-center px-3 pointer-events-none">
-              88:88:88
-            </span>
-            <span className="dseg7 text-green-400 text-lg relative" style={{ textShadow: "0 0 8px #4ade80, 0 0 2px #4ade80" }}>
-              {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
-            </span>
           </div>
           {player ? (
             <div className="flex items-center gap-2">
@@ -325,7 +311,7 @@ export default function Home() {
                     onClick={handleBegin}
                     className="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-2 rounded-xl transition"
                   >
-                    Begin Game #{game?.id}
+                    Begin Game
                   </button>
                 )}
                 {isPlaying && (
