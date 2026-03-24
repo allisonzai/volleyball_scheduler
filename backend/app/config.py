@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     # Resend — used to send verification emails over HTTPS
     RESEND_API_KEY: str = ""
     EMAIL_FROM: str = "Volleyball Scheduler <onboarding@resend.dev>"
+    FEEDBACK_TO: str = ""  # recipient address for feedback submissions
 
     # SMS — Twilio credentials + your Google Voice / Twilio FROM number
     TWILIO_ACCOUNT_SID: str = ""

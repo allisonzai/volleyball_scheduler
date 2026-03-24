@@ -39,3 +39,35 @@ def send_verification_email(to_address: str, display_name: str, code: str) -> No
         raise RuntimeError(f"Failed to send verification email (status {response.status_code})")
 
     logger.info(f"Verification email sent to {to_address}")
+
+
+def send_feedback_email(sender: str, subject: str, content: str) -> None:
+    """Forward a feedback submission to the configured FEEDBACK_TO address."""
+    if not settings.FEEDBACK_TO:
+        logger.warning("FEEDBACK_TO not configured — feedback dropped.")
+        return
+
+    body = f"From: {sender}\n\n{content}"
+
+    if settings.STUB_EMAIL:
+        logger.info(f"[STUB FEEDBACK] To: {settings.FEEDBACK_TO} | Subject: {subject} | From: {sender}")
+        return
+
+    payload = {
+        "from": settings.EMAIL_FROM,
+        "to": [settings.FEEDBACK_TO],
+        "reply_to": sender,
+        "subject": subject,
+        "text": body,
+    }
+    headers = {
+        "Authorization": f"Bearer {settings.RESEND_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    response = httpx.post(RESEND_URL, json=payload, headers=headers, timeout=10)
+    if response.status_code not in (200, 201):
+        logger.error(f"Resend feedback error {response.status_code}: {response.text}")
+        raise RuntimeError(f"Failed to send feedback email (status {response.status_code})")
+
+    logger.info(f"Feedback email forwarded to {settings.FEEDBACK_TO}")

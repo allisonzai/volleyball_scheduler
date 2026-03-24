@@ -85,6 +85,10 @@ export const getActivity = (limit = 200) =>
 export const clearActivity = (operatorSecret: string) =>
   api.delete("/activity", { headers: { "X-Operator-Secret": operatorSecret } });
 
+// Feedback
+export const sendFeedback = (sender: string, subject: string, content: string) =>
+  api.post("/feedback", { sender, subject, content });
+
 // Confirmation
 export const confirm = (player_id: number, game_id: number, response: string, secret_token: string) =>
   api.post("/confirm", { player_id, game_id, response }, { headers: { "X-Player-Token": secret_token } }).then((r) => r.data);
