@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { useGameState } from "../hooks/useGameState";
 import { usePlayer } from "../hooks/usePlayer";
@@ -29,11 +29,15 @@ export default function Home() {
   const [playerResponse, setPlayerResponse] = useState<"yes" | "no" | "defer" | null>(null);
   const [timeoutInput, setTimeoutInput] = useState("5");
   const [fillWaitInput, setFillWaitInput] = useState("1");
+  const settingsInitialized = useRef(false);
   const pageUrl = window.location.href;
 
   useEffect(() => {
-    setTimeoutInput(String(Math.round((timeoutSeconds / 60) * 10) / 10));
-    setFillWaitInput(String(Math.round((fillWaitSeconds / 60) * 10) / 10));
+    if (!settingsInitialized.current && timeoutSeconds > 0) {
+      setTimeoutInput(String(Math.round((timeoutSeconds / 60) * 10) / 10));
+      setFillWaitInput(String(Math.round((fillWaitSeconds / 60) * 10) / 10));
+      settingsInitialized.current = true;
+    }
   }, [timeoutSeconds, fillWaitSeconds]);
 
   const pendingSlot = player && game
