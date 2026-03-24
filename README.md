@@ -211,4 +211,4 @@ cd backend
 PYTHONPATH=. pytest tests/test_scenarios.py -v
 ```
 
-95 scenario-driven tests covering all spec requirements.
+96 scenario-driven tests covering all spec requirements.

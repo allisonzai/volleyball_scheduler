@@ -146,7 +146,7 @@ volleyball_scheduler/
 │   │   │   ├── email.py          # Resend HTTP API adapter
 │   │   │   └── password.py       # PBKDF2-SHA256 hash/verify
 │   ├── tests/
-│   │   └── test_scenarios.py     # 95 scenario-driven unit tests
+│   │   └── test_scenarios.py     # 96 scenario-driven unit tests
 │   ├── requirements.txt
 │   └── .env.example
 │
@@ -341,7 +341,7 @@ return game
 # game_number is NULL here; assigned later by _begin_game()
 ```
 
-### 5.2 Filling an Open Slot: `fill_slot(db, game, allow_requeue=False)`
+### 5.2 Filling an Open Slot: `fill_slot(db, game, allow_requeue=False, apply_fill_wait=True)`
 
 Called whenever a slot becomes vacant (no/defer/timeout/leave-mid-play).
 
@@ -381,9 +381,8 @@ schedule timeout (delay = CONFIRM_TIMEOUT_SECONDS)
 expire game
 log_event("player_filled", ...)
 
-# If other pending slots exist, apply fill_wait so the new player
-# gets (remaining_time + FILL_WAIT_SECONDS)
-if existing_pending:
+# Apply fill_wait only during live confirmation fills (not batch fill)
+if existing_pending and apply_fill_wait:
     _apply_fill_wait(db, game, new_slot, existing_pending)
 
 return True
@@ -409,8 +408,11 @@ for slot in existing_pending + [new_slot]:
 
 Result: every pending player's client-side formula
 `CONFIRM_TIMEOUT_SECONDS − (now − notified_at)` yields
-`old_remaining + FILL_WAIT_SECONDS`. Not applied during batch fill
-(no pending slots exist at that point).
+`old_remaining + FILL_WAIT_SECONDS`.
+
+Not applied during batch fill: `_try_fill_open_slots` passes
+`apply_fill_wait=False`, ensuring the timeout is not extended even though
+batch fill iterations leave pending slots behind them.
 
 ### 5.2b Begin Game: `force_start_game(game_id, db)`
 
@@ -470,7 +472,9 @@ if needed <= 0:
 
 else:
     for _ in range(needed):
-        if not fill_slot(game, allow_requeue=True):
+        # apply_fill_wait=False: batch fill must not extend the timeout even
+        # though intermediate iterations leave pending slots behind them
+        if not fill_slot(game, allow_requeue=True, apply_fill_wait=False):
             break               # queue exhausted; fill_slot starts game if confirmed > 0
 ```
 
