@@ -93,28 +93,71 @@ A player can be notified via:
 - SMS to their phone number (via Twilio)
 - Push notification to their phone app (via Expo)
 
+## Two-Phase Game Flow
+
+A game goes through two explicit phases:
+
+1. **Staging phase** (status: `open`) — operator clicks **Start Staging**.
+   Players are notified and asked to confirm. Players who decline or defer
+   are replaced automatically. A permanent game number is **not** yet
+   assigned; cancelled staging sessions consume no number.
+
+2. **Gaming phase** (status: `in_progress`) — the game starts and a game
+   number is assigned when:
+   - All player slots are confirmed, **or**
+   - The queue is exhausted and at least one player has confirmed.
+
+   The operator may also force the transition early with **Begin Game**,
+   which cancels any still-pending slots.
+
+## Fill-Wait
+
+When a replacement player is drawn from the queue while other slots are
+still pending confirmation, the system extends the global confirmation
+timeout by `FILL_WAIT_SECONDS` (default 60 s) so the new player gets
+adequate time. The replacement player's timer is backdated to match the
+earliest pending slot so all pending players share the same countdown.
+
 ## Operator Controls
 
 Operators authenticate using the `X-Operator-Secret` header. The following
 actions are available:
 
-- **Start New Game**: creates a new game and populates it with up to 12 players
-  from the front of the waiting list. Each selected player is notified and
-  enters the confirmation flow.
-- **End Game**: marks the current game as finished. Players who were confirmed
-  in the game are appended to the end of the waiting list. The operator must
-  press **Start New Game** to begin the next round.
-- **Start Over**: cancels the active game and clears the entire waiting list.
-  Player accounts are preserved; no players are deleted.
+- **Start Staging**: creates a new game and populates it with up to 12
+  players from the front of the waiting list. Each selected player is
+  notified and enters the confirmation flow.
+- **Begin Game #N**: force-transitions the staging game to IN_PROGRESS.
+  Any still-pending slots are cancelled (those players are removed from
+  the waiting list). Requires at least one confirmed player.
+- **End Game #N**: marks the current game as finished. Confirmed players
+  are appended to the end of the waiting list. The operator must press
+  **Start Staging** to begin the next round.
+- **Start Over**: cancels the active game and clears the entire waiting
+  list. Player accounts are preserved; no players are deleted.
+- **Save Settings**: updates confirm timeout and fill-wait seconds
+  (both in minutes). Changes take effect immediately; in-flight pending
+  timers are rescheduled to reflect the new timeout.
+
+## Event Log
+
+All significant game events are stored with timestamps in the `event_logs`
+table and exposed via `GET /api/activity`. The web interface shows these in
+the **Events** tab with a colour-coded timeline. Logged events include:
+
+- Game staging started / game begun / game ended
+- Player confirmed / declined / deferred / timed out
+- Player called up from waiting list (fill)
+- Player left mid-game
+- Settings updated
 
 ## User Interface
 
 Two interfaces are required:
 
-1. **Web page** — players can register, sign in, deregister, see who is playing,
-   who is waiting, and browse past games.
-2. **Phone app** — Android and iOS; mirrors the web page and supports in-app
-   confirmation buttons.
+1. **Web page** — players can register, sign in, deregister, see who is
+   playing, who is waiting, browse past games, and view the event log.
+2. **Phone app** — Android and iOS; mirrors the web page and supports
+   in-app confirmation buttons.
 
-For the current game and waiting list, show every player's display name and
-their signup number (assigned when they first joined the queue).
+For the current game and waiting list, show every player's display name
+and their signup number (assigned when they first joined the queue).

@@ -121,7 +121,8 @@ volleyball_scheduler/
 │   │   │   ├── player.py         # Player ORM model
 │   │   │   ├── game.py           # Game ORM model + GameStatus enum
 │   │   │   ├── game_slot.py      # GameSlot ORM model + SlotStatus enum
-│   │   │   └── waiting_list.py   # WaitingList ORM model
+│   │   │   ├── waiting_list.py   # WaitingList ORM model
+│   │   │   └── event_log.py      # EventLog ORM model
 │   │   ├── schemas/
 │   │   │   ├── player.py         # Pydantic request/response schemas
 │   │   │   ├── game.py
@@ -129,11 +130,15 @@ volleyball_scheduler/
 │   │   ├── api/
 │   │   │   ├── players.py        # /api/players routes (incl. DELETE deregister)
 │   │   │   ├── queue.py          # /api/queue routes
-│   │   │   ├── games.py          # /api/games routes (incl. /reset, /{id}/leave)
+│   │   │   ├── games.py          # /api/games routes (incl. /reset, /{id}/leave,
+│   │   │   │                     #   /{id}/begin)
 │   │   │   ├── notifications.py  # /api/confirm + /api/sms/webhook
+│   │   │   ├── settings.py       # /api/settings GET + PATCH
+│   │   │   ├── activity.py       # /api/activity (event log)
 │   │   │   └── events.py         # /api/events (SSE — backend only; not used by web)
 │   │   ├── services/
 │   │   │   ├── scheduler.py      # Core scheduling engine (threading.Timer timeouts)
+│   │   │   ├── event_logger.py   # log_event() helper — writes to event_logs table
 │   │   │   ├── display_name.py   # Display name generation + dedup
 │   │   │   ├── notifications.py  # Orchestrates SMS + push
 │   │   │   ├── sms.py            # Twilio adapter
@@ -141,7 +146,7 @@ volleyball_scheduler/
 │   │   │   ├── email.py          # Resend HTTP API adapter
 │   │   │   └── password.py       # PBKDF2-SHA256 hash/verify
 │   ├── tests/
-│   │   └── test_scenarios.py     # 92 scenario-driven unit tests
+│   │   └── test_scenarios.py     # 95 scenario-driven unit tests
 │   ├── requirements.txt
 │   └── .env.example
 │
@@ -149,16 +154,17 @@ volleyball_scheduler/
 │   ├── src/
 │   │   ├── api/client.ts         # Axios wrapper for all API calls
 │   │   ├── components/
-│   │   │   ├── CourtView.tsx     # Active game + slot status
+│   │   │   ├── CourtView.tsx         # Active game + slot status
 │   │   │   ├── WaitingListView.tsx
 │   │   │   ├── ConfirmationBanner.tsx
 │   │   │   ├── PastGamesView.tsx
+│   │   │   ├── ActivityView.tsx      # Event log timeline (Events tab)
 │   │   │   ├── PlayerBadge.tsx
 │   │   │   └── PlayerRegistration.tsx
 │   │   ├── hooks/
-│   │   │   ├── useGameState.ts   # 5-second polling hook (SSE removed for WSGI compat)
+│   │   │   ├── useGameState.ts   # 5-second polling hook; also fetches settings
 │   │   │   └── usePlayer.ts      # localStorage-persisted player
-│   │   └── pages/Home.tsx        # Single-page layout
+│   │   └── pages/Home.tsx        # Single-page layout (Live / Past Games / Events tabs)
 │   └── package.json
 │
 └── mobile/
@@ -233,13 +239,25 @@ volleyball_scheduler/
 │                  Game                     │
 ├──────────────────────────────────────────┤
 │ id           INT PK                      │
+│ game_number  INT NULL UNIQUE             │  ← assigned only when IN_PROGRESS
 │ status       VARCHAR(20)                 │
-│                open                      │
-│                in_progress               │
+│                open          (staging)   │
+│                in_progress   (gaming)    │
 │                finished                  │
 │ max_players  INT (default 12)            │
 │ started_at   DATETIME NULL               │
 │ ended_at     DATETIME NULL               │
+│ created_at   DATETIME                    │
+└──────────────────────────────────────────┘
+
+┌──────────────────────────────────────────┐
+│               EventLog                    │
+├──────────────────────────────────────────┤
+│ id           INT PK                      │
+│ event_type   VARCHAR(50)                 │
+│ description  VARCHAR(500)               │
+│ game_id      INT NULL                    │
+│ game_number  INT NULL                    │
 │ created_at   DATETIME                    │
 └──────────────────────────────────────────┘
 ```
@@ -254,15 +272,21 @@ volleyball_scheduler/
 | `GameSlot.signup_number` is copied at slot creation     | Captured from the player's `WaitingList` entry before they are removed from the queue; persists for display in the game view and past games history.                                                         |
 | A player has at most one active slot per game           | During live confirmation `fill_slot` excludes all-status slots. During batch fill (`allow_requeue=True`) only PENDING/CONFIRMED slots are excluded, so deferred players in the queue may receive a new slot. |
 | `GameSlot.position` values are unique within a game     | Tracks physical court seat assignment.                                                                                                                                                                       |
+| `Game.game_number` is NULL until IN_PROGRESS            | Assigned by `_begin_game()`. Cancelled staging sessions (never reached IN_PROGRESS) leave no gap in the game number sequence.                                                                                |
 
 ### 4.3 Game Status Transitions
 
 ```
          assign_next_game()
-NONE ──────────────────────────► OPEN
+NONE ──────────────────────────► OPEN  (Staging — game_number is NULL)
                                    │
-         all slots confirmed        │  or queue exhausted with ≥1 confirmed
-           ──────────────────────► IN_PROGRESS
+         _begin_game()             │  triggered by:
+           ──────────────────────► IN_PROGRESS  (game_number assigned here)
+                                   │
+                                   │  _begin_game() is called when:
+                                   │    • all slots confirmed (full house), OR
+                                   │    • queue exhausted with ≥1 confirmed, OR
+                                   │    • operator clicks "Begin Game" (force_start_game)
                                        │
                   end_game()           │
                     ──────────────────► FINISHED
@@ -312,7 +336,9 @@ for each player in queue[:MAX_PLAYERS]:
     schedule confirmation timeout
 
 expire game (force SQLAlchemy to reload .slots relationship)
+log_event("game_staged", ...)
 return game
+# game_number is NULL here; assigned later by _begin_game()
 ```
 
 ### 5.2 Filling an Open Slot: `fill_slot(db, game, allow_requeue=False)`
@@ -341,18 +367,69 @@ next_player = first in queue WHERE player_id NOT IN already_slotted
 if next_player is None:
     # Queue exhausted — start game with whoever confirmed so far
     if _confirmed_count(game) > 0 and game.status == OPEN:
-        game.status = IN_PROGRESS
-        game.started_at = now()
+        _begin_game(db, game)            # assigns game_number
     return False
+
+# Snapshot existing pending slots BEFORE creating the new one
+existing_pending = [s for s in game.slots WHERE s.status == PENDING_CONFIRMATION]
 
 capture next_player.signup_number        # saved before queue removal
 remove next_player from queue
-create GameSlot(status=PENDING_CONFIRMATION, signup_number=signup_number)
+new_slot = create GameSlot(PENDING_CONFIRMATION, signup_number)
 send notification
-schedule timeout
+schedule timeout (delay = CONFIRM_TIMEOUT_SECONDS)
 expire game
+log_event("player_filled", ...)
+
+# If other pending slots exist, apply fill_wait so the new player
+# gets (remaining_time + FILL_WAIT_SECONDS)
+if existing_pending:
+    _apply_fill_wait(db, game, new_slot, existing_pending)
+
 return True
 ```
+
+### 5.2a Fill-Wait: `_apply_fill_wait(db, game, new_slot, existing_pending)`
+
+Called by `fill_slot` when replacing a player while other slots are still
+pending confirmation.
+
+```
+earliest_notified_at = min(s.notified_at for s in existing_pending)
+new_slot.notified_at = earliest_notified_at    # backdate to match others
+
+CONFIRM_TIMEOUT_SECONDS += FILL_WAIT_SECONDS   # extend global setting
+
+# Reschedule all pending timers (existing + new) with the extended timeout
+for slot in existing_pending + [new_slot]:
+    elapsed   = now() - slot.notified_at
+    remaining = max(0, CONFIRM_TIMEOUT_SECONDS - elapsed)
+    reschedule_timeout(slot.player_id, game.id, delay=remaining)
+```
+
+Result: every pending player's client-side formula
+`CONFIRM_TIMEOUT_SECONDS − (now − notified_at)` yields
+`old_remaining + FILL_WAIT_SECONDS`. Not applied during batch fill
+(no pending slots exist at that point).
+
+### 5.2b Begin Game: `force_start_game(game_id, db)`
+
+Operator-triggered early transition from OPEN → IN_PROGRESS.
+
+```
+game = load Game(game_id); assert status == OPEN
+if _confirmed_count(game) == 0:
+    raise ValueError  # nothing to start
+
+for slot in game.slots WHERE status == PENDING_CONFIRMATION:
+    cancel_timeout(slot.player_id, game_id)
+    slot.status = DECLINED
+    remove_from_queue(slot.player_id)
+
+_begin_game(db, game)    # assigns game_number, sets started_at
+log_event("game_force_begun", ...)
+```
+
 
 ### 5.3 Handling a Confirmation: `handle_confirmation(player_id, game_id, response, db)`
 
@@ -597,17 +674,19 @@ all remaining entries as `1, 2, 3, …N` to prevent gaps.
 | `GET`    | `/api/games/current`    | None                | Return the active game (OPEN or IN_PROGRESS), or `null`.                       |
 | `GET`    | `/api/games`            | None                | List all games. Optional `?status=` filter.                                    |
 | `GET`    | `/api/games/{id}`       | None                | Get a specific game with all its slots.                                        |
-| `POST`   | `/api/games/start`      | `X-Operator-Secret` | Create and populate the next game from the queue.                              |
-| `POST`   | `/api/games/{id}/end`   | `X-Operator-Secret` | Mark a game finished and trigger rotation.                                     |
-| `POST`   | `/api/games/reset`      | `X-Operator-Secret` | Cancel active game and clear waiting list (Start Over). History preserved.     |
-| `DELETE` | `/api/games/history`    | `X-Operator-Secret` | Delete all finished game records and reset game ID sequence.                   |
-| `POST`   | `/api/games/{id}/leave` | `X-Player-Token`    | Confirmed player leaves an active game mid-play (removed from queue entirely). |
+| `POST`   | `/api/games/start`        | `X-Operator-Secret` | Create and populate the next game (staging phase).                               |
+| `POST`   | `/api/games/{id}/begin`   | `X-Operator-Secret` | Force-start: cancel pending slots, transition to IN_PROGRESS.                    |
+| `POST`   | `/api/games/{id}/end`     | `X-Operator-Secret` | Mark a game finished and trigger rotation.                                       |
+| `POST`   | `/api/games/reset`        | `X-Operator-Secret` | Cancel active game and clear waiting list (Start Over). History preserved.       |
+| `DELETE` | `/api/games/history`      | `X-Operator-Secret` | Delete all finished game records and reset game ID sequence.                     |
+| `POST`   | `/api/games/{id}/leave`   | `X-Player-Token`    | Confirmed player leaves an active game mid-play (removed from queue entirely).   |
 
 **Game response:**
 
 ```json
 {
-  "id": 1,
+  "id": 7,
+  "game_number": 3,
   "status": "in_progress",
   "max_players": 12,
   "started_at": "2026-03-22T10:05:00",
@@ -626,6 +705,39 @@ all remaining entries as `1, 2, 3, …N` to prevent gaps.
   ]
 }
 ```
+
+`game_number` is `null` during staging and assigned when the game enters
+`in_progress`. The internal `id` is always present but not shown to users.
+
+### Settings
+
+| Method  | Path             | Auth                | Description                          |
+| ------- | ---------------- | ------------------- | ------------------------------------ |
+| `GET`   | `/api/settings`  | None                | Return current confirm_timeout_seconds, fill_wait_seconds, max_players. |
+| `PATCH` | `/api/settings`  | `X-Operator-Secret` | Update confirm_timeout_seconds and/or fill_wait_seconds. In-flight timers are rescheduled immediately. |
+
+### Activity Log
+
+| Method | Path            | Auth | Description                                          |
+| ------ | --------------- | ---- | ---------------------------------------------------- |
+| `GET`  | `/api/activity` | None | Return event log entries, newest first. `?limit=200` |
+
+**Activity entry:**
+
+```json
+{
+  "id": 42,
+  "event_type": "player_confirmed",
+  "description": "Alice S confirmed.",
+  "game_id": 7,
+  "game_number": 3,
+  "created_at": "2026-03-22T10:05:30"
+}
+```
+
+**Event types:** `game_staged`, `game_begun`, `game_force_begun`,
+`game_ended`, `player_confirmed`, `player_declined`, `player_deferred`,
+`player_timed_out`, `player_filled`, `player_left`, `settings_updated`.
 
 ### Confirmation
 
