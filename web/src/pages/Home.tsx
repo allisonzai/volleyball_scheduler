@@ -14,6 +14,12 @@ import type { Player } from "../types";
 
 type Tab = "live" | "history" | "events" | "feedback";
 
+const TAB_LABELS: Record<Tab, string> = { live: "Live", history: "History", events: "Events", feedback: "Feedback" };
+
+function getApiError(err: unknown, fallback: string): string {
+  return (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? fallback;
+}
+
 export default function Home() {
   const { player, setPlayer } = usePlayer();
   const { game, queue, loading, refresh, timeoutSeconds, fillWaitSeconds } = useGameState();
@@ -31,14 +37,10 @@ export default function Home() {
     return () => clearInterval(id);
   }, []);
 
-  // Keep input fields in sync when server values change (e.g. after a fill_wait)
   useEffect(() => {
     setTimeoutInput(String(Math.round((timeoutSeconds / 60) * 10) / 10));
-  }, [timeoutSeconds]);
-
-  useEffect(() => {
     setFillWaitInput(String(Math.round((fillWaitSeconds / 60) * 10) / 10));
-  }, [fillWaitSeconds]);
+  }, [timeoutSeconds, fillWaitSeconds]);
 
   const pendingSlot = player && game
     ? game.slots.find(
@@ -54,7 +56,7 @@ export default function Home() {
       await joinQueue(player.id, player.secret_token);
       refresh();
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Could not join queue.";
+      const msg = getApiError(err, "Could not join queue.");
       alert(msg);
     }
   };
@@ -66,7 +68,7 @@ export default function Home() {
       await startGame(operatorSecret);
       refresh();
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Could not start game.";
+      const msg = getApiError(err, "Could not start game.");
       alert(msg);
     }
   };
@@ -111,7 +113,7 @@ export default function Home() {
       await beginGame(game.id, operatorSecret);
       refresh();
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Could not begin game.";
+      const msg = getApiError(err, "Could not begin game.");
       alert(msg);
     }
   };
@@ -141,7 +143,7 @@ export default function Home() {
       setShowRegister(true);
       refresh();
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Could not deregister.";
+      const msg = getApiError(err, "Could not deregister.");
       alert(msg);
     }
   };
@@ -240,7 +242,7 @@ export default function Home() {
                   : "text-gray-600 hover:bg-gray-50"
               }`}
             >
-              {t === "live" ? "Live" : t === "history" ? "History" : t === "events" ? "Events" : "Feedback"}
+              {TAB_LABELS[t]}
             </button>
           ))}
         </div>

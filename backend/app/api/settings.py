@@ -1,5 +1,4 @@
 from __future__ import annotations
-import secrets as _secrets
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -7,15 +6,11 @@ from typing import Optional
 
 from app.config import settings
 from app.database import get_db
+from app.api.deps import require_operator
 from app.services import scheduler
 from app.services.event_logger import log_event
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
-
-
-def _require_operator(token: Optional[str]) -> None:
-    if not token or not _secrets.compare_digest(token, settings.OPERATOR_SECRET):
-        raise HTTPException(401, "Invalid or missing operator secret.")
 
 
 class SettingsOut(BaseModel):
@@ -44,7 +39,7 @@ def update_settings(
     x_operator_secret: Optional[str] = Header(default=None),
     db: Session = Depends(get_db),
 ):
-    _require_operator(x_operator_secret)
+    require_operator(x_operator_secret)
 
     if body.confirm_timeout_seconds is not None:
         if body.confirm_timeout_seconds < 30:
@@ -64,8 +59,4 @@ def update_settings(
         f"fill wait: {settings.FILL_WAIT_SECONDS}s.",
     )
 
-    return SettingsOut(
-        confirm_timeout_seconds=settings.CONFIRM_TIMEOUT_SECONDS,
-        fill_wait_seconds=settings.FILL_WAIT_SECONDS,
-        max_players=settings.MAX_PLAYERS,
-    )
+    return get_settings()

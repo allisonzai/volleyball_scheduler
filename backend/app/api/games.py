@@ -5,19 +5,14 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.database import get_db
+from app.api.deps import require_operator
 from app.models.game import Game, GameStatus
-from app.models.game_slot import SlotStatus
+from app.models.player import Player
 from app.schemas.game import GameOut, SlotOut, GameCreate
 from app.services import scheduler
 
 router = APIRouter(prefix="/api/games", tags=["games"])
-
-
-def _require_operator(token: Optional[str]) -> None:
-    if not token or not secrets.compare_digest(token, settings.OPERATOR_SECRET):
-        raise HTTPException(401, "Invalid or missing operator secret.")
 
 
 def _slot_to_schema(slot) -> SlotOut:
@@ -32,7 +27,7 @@ def _slot_to_schema(slot) -> SlotOut:
     )
 
 
-def _game_to_schema(game: Game, db: Session) -> GameOut:
+def _game_to_schema(game: Game) -> GameOut:
     slots = [_slot_to_schema(slot) for slot in sorted(game.slots, key=lambda s: s.position)]
     return GameOut(
         id=game.id,
@@ -56,7 +51,7 @@ def get_current_game(db: Session = Depends(get_db)):
     )
     if not game:
         return None
-    return _game_to_schema(game, db)
+    return _game_to_schema(game)
 
 
 @router.get("", response_model=list[GameOut])
@@ -65,7 +60,7 @@ def list_games(status: Optional[str] = None, db: Session = Depends(get_db)):
     if status:
         q = q.filter(Game.status == status)
     games = q.order_by(Game.id.desc()).all()
-    return [_game_to_schema(g, db) for g in games]
+    return [_game_to_schema(g) for g in games]
 
 
 @router.get("/{game_id}", response_model=GameOut)
@@ -73,7 +68,7 @@ def get_game(game_id: int, db: Session = Depends(get_db)):
     game = db.query(Game).filter(Game.id == game_id).first()
     if not game:
         raise HTTPException(404, "Game not found.")
-    return _game_to_schema(game, db)
+    return _game_to_schema(game)
 
 
 @router.post("/reset", status_code=204)
@@ -81,7 +76,7 @@ def reset_all(
     x_operator_secret: Optional[str] = Header(default=None),
     db: Session = Depends(get_db),
 ):
-    _require_operator(x_operator_secret)
+    require_operator(x_operator_secret)
     scheduler.reset_all(db)
     db.commit()
 
@@ -91,7 +86,7 @@ def clear_history(
     x_operator_secret: Optional[str] = Header(default=None),
     db: Session = Depends(get_db),
 ):
-    _require_operator(x_operator_secret)
+    require_operator(x_operator_secret)
     scheduler.clear_history(db)
     db.commit()
 
@@ -101,7 +96,7 @@ def start_game(
     x_operator_secret: Optional[str] = Header(default=None),
     db: Session = Depends(get_db),
 ):
-    _require_operator(x_operator_secret)
+    require_operator(x_operator_secret)
     active = (
         db.query(Game)
         .filter(Game.status.in_([GameStatus.OPEN, GameStatus.IN_PROGRESS]))
@@ -117,7 +112,7 @@ def start_game(
     db.commit()
     db.refresh(game)
     scheduler.broadcast_update("game_update")
-    return _game_to_schema(game, db)
+    return _game_to_schema(game)
 
 
 @router.post("/{game_id}/begin", response_model=GameOut)
@@ -128,7 +123,7 @@ def begin_game(
 ):
     """Force the staging phase to end and start the game immediately with
     whoever has already confirmed.  Pending slots are cancelled."""
-    _require_operator(x_operator_secret)
+    require_operator(x_operator_secret)
     try:
         game = scheduler.force_start_game(game_id, db)
     except (LookupError, ValueError) as e:
@@ -136,7 +131,7 @@ def begin_game(
     db.commit()
     db.refresh(game)
     scheduler.broadcast_update("game_update")
-    return _game_to_schema(game, db)
+    return _game_to_schema(game)
 
 
 @router.post("/{game_id}/leave", status_code=204)
@@ -145,14 +140,9 @@ def leave_game(
     x_player_token: Optional[str] = Header(default=None),
     db: Session = Depends(get_db),
 ):
-    from app.models.game_slot import GameSlot
     if not x_player_token:
         raise HTTPException(401, "Missing player token.")
-    # Find the player by token
-    from app.models.player import Player
-    import secrets as _secrets
-    players = db.query(Player).all()
-    player = next((p for p in players if _secrets.compare_digest(p.secret_token, x_player_token)), None)
+    player = db.query(Player).filter(Player.secret_token == x_player_token).first()
     if not player:
         raise HTTPException(401, "Invalid player token.")
     try:
@@ -168,7 +158,7 @@ def end_game(
     x_operator_secret: Optional[str] = Header(default=None),
     db: Session = Depends(get_db),
 ):
-    _require_operator(x_operator_secret)
+    require_operator(x_operator_secret)
     try:
         game = scheduler.end_game(game_id, db)
     except LookupError as e:
@@ -177,4 +167,4 @@ def end_game(
     db.commit()
     db.refresh(game)
     scheduler.broadcast_update("game_update")
-    return _game_to_schema(game, db)
+    return _game_to_schema(game)

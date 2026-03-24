@@ -64,7 +64,7 @@ export default function CourtView({ game, currentPlayerId, currentPlayer, timeou
     );
   }
 
-  const slots = Array.isArray(game.slots) ? game.slots : [];
+  const slots = game.slots;
   const confirmed = slots.filter((s) => s.status === "confirmed");
   const pending = slots.filter((s) => s.status === "pending_confirmation");
 
@@ -79,7 +79,7 @@ export default function CourtView({ game, currentPlayerId, currentPlayer, timeou
       ? { label: "Staging — waiting for players…", color: "text-gray-400" }
       : STATUS_LABELS[game.status] ?? { label: game.status, color: "text-gray-500" };
 
-  const Checkmark = () => (
+  const checkmark = (
     <span className="text-green-500 shrink-0">
       <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="20 6 9 17 4 12" />
@@ -117,7 +117,7 @@ export default function CourtView({ game, currentPlayerId, currentPlayer, timeou
                     />
                   </div>
                   {isConfirmed ? (
-                    <Checkmark />
+                    checkmark
                   ) : (
                     <SlotTimer slot={slot} timeoutSeconds={timeoutSeconds} />
                   )}

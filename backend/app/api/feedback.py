@@ -15,9 +15,10 @@ class FeedbackIn(BaseModel):
 
 @router.post("", status_code=204)
 def submit_feedback(body: FeedbackIn) -> None:
-    if not body.sender.strip() or not body.subject.strip() or not body.content.strip():
+    sender, subject, content = body.sender.strip(), body.subject.strip(), body.content.strip()
+    if not sender or not subject or not content:
         raise HTTPException(400, "All fields are required.")
     try:
-        send_feedback_email(body.sender.strip(), body.subject.strip(), body.content.strip())
+        send_feedback_email(sender, subject, content)
     except RuntimeError as e:
         raise HTTPException(502, str(e))
