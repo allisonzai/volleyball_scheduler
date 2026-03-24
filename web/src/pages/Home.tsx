@@ -141,12 +141,8 @@ export default function Home() {
               </svg>
             </button>
           </div>
-          <div className="flex items-center gap-1.5 text-sm font-mono text-gray-500">
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
-            </svg>
-            {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+          <div className="bg-gray-900 text-green-400 font-mono text-sm font-bold px-3 py-1 rounded-lg tracking-widest tabular-nums shadow-inner border border-gray-700 select-none">
+            {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
           </div>
           {player ? (
             <div className="flex items-center gap-2">
