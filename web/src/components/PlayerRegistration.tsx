@@ -31,8 +31,15 @@ export default function PlayerRegistration({ onRegistered, onCancel }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const errMsg = (err: unknown) =>
-    (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Something went wrong.";
+  const errMsg = (err: unknown): string => {
+    const e = err as { response?: { data?: { detail?: unknown }; status?: number }; message?: string };
+    const detail = e?.response?.data?.detail;
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail)) return detail.map((d: { msg?: string }) => d.msg).filter(Boolean).join("; ");
+    if (e?.response?.status) return `Server error ${e.response.status}.`;
+    if (e?.message) return e.message;
+    return "Something went wrong.";
+  };
 
   // ── Register ──────────────────────────────────────────────────────────────
 
