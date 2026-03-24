@@ -468,8 +468,7 @@ def handle_confirmation(player_id: int, game_id: int, response: str, db: Session
         _remove_from_queue(db, player_id)
         log_event(db, "player_declined", f"{player_name} declined — removed from waiting list.",
                   game_id=game_id, game_number=gnum)
-        # Don't fill immediately — wait until all pending slots resolve, then batch-fill
-        _try_fill_open_slots(db, game)
+        fill_slot(db, game)
         logger.info(f"Player {player_id} declined game {game_id} — removed from queue.")
 
     elif response == "defer":
