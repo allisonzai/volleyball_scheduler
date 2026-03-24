@@ -2,7 +2,7 @@ from __future__ import annotations
 import secrets
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -71,7 +71,7 @@ def get_game(game_id: int, db: Session = Depends(get_db)):
     return _game_to_schema(game)
 
 
-@router.post("/reset", status_code=204)
+@router.post("/reset", status_code=204, response_class=Response)
 def reset_all(
     x_operator_secret: Optional[str] = Header(default=None),
     db: Session = Depends(get_db),
@@ -81,7 +81,7 @@ def reset_all(
     db.commit()
 
 
-@router.delete("/history", status_code=204)
+@router.delete("/history", status_code=204, response_class=Response)
 def clear_history(
     x_operator_secret: Optional[str] = Header(default=None),
     db: Session = Depends(get_db),
@@ -134,7 +134,7 @@ def begin_game(
     return _game_to_schema(game)
 
 
-@router.post("/{game_id}/leave", status_code=204)
+@router.post("/{game_id}/leave", status_code=204, response_class=Response)
 def leave_game(
     game_id: int,
     x_player_token: Optional[str] = Header(default=None),

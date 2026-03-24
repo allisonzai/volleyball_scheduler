@@ -1,6 +1,6 @@
 from __future__ import annotations
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 
 from app.services.email import send_feedback_email
 
@@ -13,8 +13,8 @@ class FeedbackIn(BaseModel):
     content: str
 
 
-@router.post("", status_code=204)
-def submit_feedback(body: FeedbackIn) -> None:
+@router.post("", status_code=204, response_class=Response)
+def submit_feedback(body: FeedbackIn) -> Response:
     sender, subject, content = body.sender.strip(), body.subject.strip(), body.content.strip()
     if not sender or not subject or not content:
         raise HTTPException(400, "All fields are required.")

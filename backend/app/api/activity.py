@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import List, Optional
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Header, Query, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -37,7 +37,7 @@ def get_activity(
     )
 
 
-@router.delete("", status_code=204)
+@router.delete("", status_code=204, response_class=Response)
 def clear_activity(
     x_operator_secret: Optional[str] = Header(default=None),
     db: Session = Depends(get_db),

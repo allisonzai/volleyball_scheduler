@@ -5,7 +5,7 @@ import secrets
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -106,7 +106,7 @@ def update_push_token(player_id: int, data: PlayerUpdate, db: Session = Depends(
     return player
 
 
-@router.delete("/{player_id}", status_code=204)
+@router.delete("/{player_id}", status_code=204, response_class=Response)
 def deregister_player(
     player_id: int,
     x_player_token: Optional[str] = Header(default=None),
