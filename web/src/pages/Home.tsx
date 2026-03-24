@@ -367,7 +367,7 @@ export default function Home() {
             </p>
             <ul className="space-y-1 mt-2">
               <li>💸 <span className="font-medium">Zelle</span> — allisonazhang@gmail.com</li>
-              <li>💳 <span className="font-medium">PayPal</span> — <a href="https://paypal.me/allisonazhang" target="_blank" rel="noreferrer" className="text-blue-600 underline">paypal.me/allisonazhang</a></li>
+              <li>💳 <span className="font-medium">PayPal</span> — <a href="https://paypal.me/AllisonZhang2011" target="_blank" rel="noreferrer" className="text-blue-600 underline">paypal.me/allisonazhang</a></li>
               <li>📱 <span className="font-medium">Venmo</span> — <a href="https://venmo.com/allisonazhang" target="_blank" rel="noreferrer" className="text-blue-600 underline">@allisonazhang</a></li>
               <li>🍎 <span className="font-medium">Apple Pay / Cash App</span> — allisonazhang@gmail.com</li>
             </ul>
