@@ -738,7 +738,8 @@ backend on port 8000.
 
 ```
 ┌────────────────────────────────────┐
-│  🏐 Volleyball Scheduler  🕐12:34:05  Alice S. │  ← Header (sticky, wall clock always visible)
+│  🏐 Volleyball Scheduler [12:34:05] Alice S. │  ← Header (sticky); digital clock (dark bg,
+│                                              │    green digits, 24 h) always visible
 ├────────────────────────────────────┤
 │                                    │
 │  ┌─────────────────────────────┐   │
@@ -781,6 +782,12 @@ trusted local network model.
 Live game state is fetched via the `useGameState` hook, which polls
 `/api/games/current` and `/api/queue` every 5 seconds. SSE was removed because
 PythonAnywhere's WSGI adapter would block one worker per open connection.
+
+**Timestamp rendering.** The backend stores all timestamps as UTC via
+`datetime.utcnow()` without a timezone suffix. Clients append `"Z"` before
+passing to `new Date()` so the browser treats them as UTC; `toLocaleString()`
+then converts to the viewer's local timezone. This applies to past game
+start/end times in `PastGamesView`.
 
 ### 8.2 Mobile Application
 

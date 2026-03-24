@@ -249,8 +249,8 @@ testing.
   sections with signup numbers), the full waiting list (with signup numbers),
   and past games.
 - A **QR code** sharing the page URL is available in the header.
-- A **live wall clock** (HH:MM:SS) is always visible in the header, ticking
-  every second.
+- A **digital clock** (24-hour HH:MM:SS, dark background with green digits) is
+  always visible in the header, ticking every second.
 - A **countdown timer** (MM:SS) is shown on the confirmation banner and next to
   each player in the "Awaiting Confirmation" section, turning red and pulsing
   under 60 seconds.
@@ -275,9 +275,9 @@ testing.
 ## 12. Past Games
 
 - Finished games are listed in reverse chronological order.
-- Each game shows: game number, start/end timestamps, and all players who were
-  confirmed or withdrew (with signup number and a "left" label for withdrawn
-  players).
+- Each game shows: game number, start/end timestamps (displayed in the viewer's
+  local timezone), and all players who were confirmed or withdrew (with signup
+  number and a "left" label for withdrawn players).
 - The operator may **Clear History** to delete all finished game records (resets
   the game ID sequence).
 
