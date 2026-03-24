@@ -56,6 +56,8 @@ export const resetAll = (operatorSecret: string) =>
   api.post("/games/reset", null, { headers: { "X-Operator-Secret": operatorSecret } });
 export const clearHistory = (operatorSecret: string) =>
   api.delete("/games/history", { headers: { "X-Operator-Secret": operatorSecret } });
+export const beginGame = (id: number, operatorSecret: string) =>
+  api.post(`/games/${id}/begin`, null, { headers: { "X-Operator-Secret": operatorSecret } }).then((r) => r.data);
 export const endGame = (id: number, operatorSecret: string) =>
   api.post(`/games/${id}/end`, null, { headers: { "X-Operator-Secret": operatorSecret } }).then((r) => r.data);
 export const leaveGame = (gameId: number, secretToken: string) =>

@@ -40,8 +40,8 @@ function SlotTimer({ slot, timeoutSeconds }: { slot: Slot; timeoutSeconds: numbe
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  open: { label: "Confirming players…", color: "text-yellow-600" },
-  in_progress: { label: "Game in progress", color: "text-green-600" },
+  open: { label: "Staging — awaiting confirmations", color: "text-yellow-600" },
+  in_progress: { label: "Gaming — game in progress", color: "text-green-600" },
   finished: { label: "Game finished", color: "text-gray-400" },
 };
 
@@ -76,7 +76,7 @@ export default function CourtView({ game, currentPlayerId, currentPlayer, timeou
 
   const statusInfo =
     game.status === "open" && pending.length === 0
-      ? { label: "Waiting for players…", color: "text-gray-400" }
+      ? { label: "Staging — waiting for players…", color: "text-gray-400" }
       : STATUS_LABELS[game.status] ?? { label: game.status, color: "text-gray-500" };
 
   const Checkmark = () => (

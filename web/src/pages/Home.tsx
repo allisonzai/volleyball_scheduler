@@ -7,7 +7,7 @@ import WaitingListView from "../components/WaitingListView";
 import PlayerRegistration from "../components/PlayerRegistration";
 import ConfirmationBanner from "../components/ConfirmationBanner";
 import PastGamesView from "../components/PastGamesView";
-import { joinQueue, startGame, endGame, deregisterPlayer, resetAll, updateSettings } from "../api/client";
+import { joinQueue, startGame, beginGame, endGame, deregisterPlayer, resetAll, updateSettings } from "../api/client";
 import type { Player } from "../types";
 
 type Tab = "live" | "history";
@@ -102,6 +102,18 @@ export default function Home() {
     }
   };
 
+  const handleBegin = async () => {
+    if (!game) return;
+    if (!confirm(`Begin game #${game.id} now? Unconfirmed players will be removed.`)) return;
+    try {
+      await beginGame(game.id, operatorSecret);
+      refresh();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Could not begin game.";
+      alert(msg);
+    }
+  };
+
   const handleEnd = async () => {
     if (!game) return;
     if (!confirm(`End game #${game.id}?`)) return;
@@ -132,7 +144,9 @@ export default function Home() {
     }
   };
 
-  const isGameActive = game && (game.status === "open" || game.status === "in_progress");
+  const isStaging = game?.status === "open";
+  const isPlaying = game?.status === "in_progress";
+  const isGameActive = isStaging || isPlaying;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-yellow-50">
@@ -297,10 +311,18 @@ export default function Home() {
                     onClick={handleStart}
                     className="flex-1 bg-volleyball-blue hover:bg-blue-800 text-white text-sm font-medium py-2 rounded-xl transition"
                   >
-                    Start New Game
+                    Start Staging
                   </button>
                 )}
-                {isGameActive && (
+                {isStaging && (
+                  <button
+                    onClick={handleBegin}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-2 rounded-xl transition"
+                  >
+                    Begin Game #{game?.id}
+                  </button>
+                )}
+                {isPlaying && (
                   <button
                     onClick={handleEnd}
                     className="flex-1 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium py-2 rounded-xl transition"

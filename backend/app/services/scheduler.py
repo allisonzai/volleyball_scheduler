@@ -469,6 +469,37 @@ def handle_timeout(player_id: int, game_id: int, db: Session) -> None:
     handle_confirmation(player_id, game_id, "no", db)
 
 
+def force_start_game(game_id: int, db: Session) -> Game:
+    """Operator forces the staging phase to end immediately.
+    Pending (unconfirmed) slots are cancelled and those players are removed
+    from the queue.  The game transitions to IN_PROGRESS with whoever has
+    already confirmed.  Raises ValueError if no players have confirmed yet."""
+    game = db.query(Game).filter(Game.id == game_id).first()
+    if not game:
+        raise LookupError(f"Game {game_id} not found.")
+    if game.status != GameStatus.OPEN:
+        raise ValueError("Only a staging (open) game can be force-started.")
+
+    confirmed = _confirmed_count(game)
+    if confirmed == 0:
+        raise ValueError("Cannot begin game: no players have confirmed yet.")
+
+    for slot in game.slots:
+        if slot.status == SlotStatus.PENDING_CONFIRMATION:
+            _cancel_timeout(slot.player_id, game_id)
+            slot.status = SlotStatus.DECLINED
+            slot.responded_at = datetime.utcnow()
+            _remove_from_queue(db, slot.player_id)
+
+    game.status = GameStatus.IN_PROGRESS
+    game.started_at = datetime.utcnow()
+    db.flush()
+    logger.info(
+        f"Operator force-started game {game_id} with {confirmed} confirmed player(s)."
+    )
+    return game
+
+
 def end_game(game_id: int, db: Session) -> Game:
     """Mark a game as finished and rotate court players to end of waiting list."""
     game = db.query(Game).filter(Game.id == game_id).first()

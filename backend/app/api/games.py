@@ -119,6 +119,25 @@ def start_game(
     return _game_to_schema(game, db)
 
 
+@router.post("/{game_id}/begin", response_model=GameOut)
+def begin_game(
+    game_id: int,
+    x_operator_secret: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    """Force the staging phase to end and start the game immediately with
+    whoever has already confirmed.  Pending slots are cancelled."""
+    _require_operator(x_operator_secret)
+    try:
+        game = scheduler.force_start_game(game_id, db)
+    except (LookupError, ValueError) as e:
+        raise HTTPException(400, str(e))
+    db.commit()
+    db.refresh(game)
+    scheduler.broadcast_update("game_update")
+    return _game_to_schema(game, db)
+
+
 @router.post("/{game_id}/leave", status_code=204)
 def leave_game(
     game_id: int,
