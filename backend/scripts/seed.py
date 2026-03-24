@@ -434,7 +434,7 @@ def main() -> None:
     base = args.url.rstrip("/") + "/api"
     print(f"\nTarget: {base}")
 
-    with httpx.Client(base_url=base, timeout=15, trust_env=False) as client:
+    with httpx.Client(base_url=base, timeout=15) as client:
         if args.cleanup:
             cmd_cleanup(client)
         elif args.demo:
