@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { getCurrentGame, getQueue } from "../api/client";
+import { getCurrentGame, getQueue, getSettings } from "../api/client";
 import type { Game, QueueEntry } from "../types";
 
 export function useGameState() {
@@ -7,12 +7,20 @@ export function useGameState() {
   const [queue, setQueue] = useState<QueueEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [timeoutSeconds, setTimeoutSeconds] = useState(300);
+  const [fillWaitSeconds, setFillWaitSeconds] = useState(60);
 
   const refresh = useCallback(async () => {
     try {
-      const [g, q] = await Promise.all([getCurrentGame(), getQueue()]);
+      const [g, q, s] = await Promise.all([
+        getCurrentGame(),
+        getQueue(),
+        getSettings(),
+      ]);
       setGame(g && typeof g === "object" && "id" in g ? g : null);
       setQueue(Array.isArray(q) ? q : []);
+      setTimeoutSeconds(s.confirm_timeout_seconds);
+      setFillWaitSeconds(s.fill_wait_seconds);
       setError(null);
     } catch (e) {
       setError("Failed to load game state.");
@@ -32,5 +40,5 @@ export function useGameState() {
     };
   }, [refresh]);
 
-  return { game, queue, loading, error, refresh };
+  return { game, queue, loading, error, refresh, timeoutSeconds, fillWaitSeconds };
 }

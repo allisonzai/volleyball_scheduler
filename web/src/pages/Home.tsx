@@ -7,20 +7,20 @@ import WaitingListView from "../components/WaitingListView";
 import PlayerRegistration from "../components/PlayerRegistration";
 import ConfirmationBanner from "../components/ConfirmationBanner";
 import PastGamesView from "../components/PastGamesView";
-import { joinQueue, startGame, endGame, deregisterPlayer, resetAll, getSettings, updateSettings } from "../api/client";
+import { joinQueue, startGame, endGame, deregisterPlayer, resetAll, updateSettings } from "../api/client";
 import type { Player } from "../types";
 
 type Tab = "live" | "history";
 
 export default function Home() {
   const { player, setPlayer } = usePlayer();
-  const { game, queue, loading, refresh } = useGameState();
+  const { game, queue, loading, refresh, timeoutSeconds, fillWaitSeconds } = useGameState();
   const [tab, setTab] = useState<Tab>("live");
   const [showRegister, setShowRegister] = useState(!player);
   const [showQR, setShowQR] = useState(false);
-  const [timeoutSeconds, setTimeoutSeconds] = useState(300);
   const [playerResponse, setPlayerResponse] = useState<"yes" | "no" | "defer" | null>(null);
   const [timeoutInput, setTimeoutInput] = useState("5");
+  const [fillWaitInput, setFillWaitInput] = useState("1");
   const [now, setNow] = useState(new Date());
   const pageUrl = window.location.href;
 
@@ -29,12 +29,14 @@ export default function Home() {
     return () => clearInterval(id);
   }, []);
 
+  // Keep input fields in sync when server values change (e.g. after a fill_wait)
   useEffect(() => {
-    getSettings().then((s: { confirm_timeout_seconds: number }) => {
-      setTimeoutSeconds(s.confirm_timeout_seconds);
-      setTimeoutInput(String(Math.round(s.confirm_timeout_seconds / 60)));
-    });
-  }, []);
+    setTimeoutInput(String(Math.round((timeoutSeconds / 60) * 10) / 10));
+  }, [timeoutSeconds]);
+
+  useEffect(() => {
+    setFillWaitInput(String(Math.round((fillWaitSeconds / 60) * 10) / 10));
+  }, [fillWaitSeconds]);
 
   const pendingSlot = player && game
     ? game.slots.find(
@@ -69,13 +71,24 @@ export default function Home() {
 
   const handleSaveTimeout = async () => {
     const mins = parseFloat(timeoutInput);
-    if (isNaN(mins) || mins < 0.5) { alert("Minimum timeout is 0.5 minutes (30 seconds)."); return; }
-    const secs = Math.round(mins * 60);
+    if (isNaN(mins) || mins < 0.5) {
+      alert("Minimum timeout is 0.5 minutes (30 seconds).");
+      return;
+    }
+    const fillMins = parseFloat(fillWaitInput);
+    if (isNaN(fillMins) || fillMins < 0) {
+      alert("Fill wait must be >= 0 minutes.");
+      return;
+    }
     try {
-      const s = await updateSettings(secs, operatorSecret);
-      setTimeoutSeconds(s.confirm_timeout_seconds);
+      await updateSettings(
+        Math.round(mins * 60),
+        Math.round(fillMins * 60),
+        operatorSecret,
+      );
+      refresh();
     } catch {
-      alert("Could not update timeout.");
+      alert("Could not update settings.");
     }
   };
 
@@ -246,7 +259,7 @@ export default function Home() {
             {/* Operator controls */}
             <div className="border-t border-dashed border-gray-200 pt-4">
               <p className="text-xs text-gray-400 mb-2 text-center">Operator Controls</p>
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex flex-wrap items-center gap-2 mb-2">
                 <label className="text-xs text-gray-500 whitespace-nowrap">Confirm timeout</label>
                 <input
                   type="number"
@@ -257,13 +270,26 @@ export default function Home() {
                   className="w-16 text-sm border border-gray-300 rounded-lg px-2 py-1 text-center"
                 />
                 <span className="text-xs text-gray-500">min</span>
+                <span className="text-xs text-gray-400">(now: {Math.round((timeoutSeconds / 60) * 10) / 10} min)</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <label className="text-xs text-gray-500 whitespace-nowrap">Fill wait</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={fillWaitInput}
+                  onChange={(e) => setFillWaitInput(e.target.value)}
+                  className="w-16 text-sm border border-gray-300 rounded-lg px-2 py-1 text-center"
+                />
+                <span className="text-xs text-gray-500">min</span>
+                <span className="text-xs text-gray-400">(now: {Math.round((fillWaitSeconds / 60) * 10) / 10} min)</span>
                 <button
                   onClick={handleSaveTimeout}
                   className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-lg border border-gray-300 transition"
                 >
                   Save
                 </button>
-                <span className="text-xs text-gray-400">(now: {Math.round(timeoutSeconds / 60 * 10) / 10} min)</span>
               </div>
               <div className="flex gap-3 flex-wrap">
                 {!isGameActive && (

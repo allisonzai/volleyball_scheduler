@@ -284,6 +284,46 @@ def _try_fill_open_slots(db: Session, game: Game) -> None:
         db.expire(game)
 
 
+def _apply_fill_wait(
+    db: Session,
+    game: Game,
+    new_slot: GameSlot,
+    existing_pending: list,
+) -> None:
+    """Called when a replacement player is added during an active confirmation
+    phase (i.e. other slots are still pending).
+
+    - Backdates new_slot.notified_at to match the earliest pending slot so
+      every player's client-side countdown formula yields the same reference.
+    - Increases CONFIRM_TIMEOUT_SECONDS by FILL_WAIT_SECONDS so the new
+      player (and all remaining pending players) get extra time.
+    - Reschedules all pending timers to reflect the new timeout.
+    """
+    refs = [s.notified_at for s in existing_pending if s.notified_at is not None]
+    if not refs:
+        return
+
+    earliest = min(refs)
+    new_slot.notified_at = earliest
+    db.flush()
+
+    settings.CONFIRM_TIMEOUT_SECONDS += settings.FILL_WAIT_SECONDS
+
+    now = datetime.utcnow()
+    for slot in existing_pending + [new_slot]:
+        if slot.notified_at is None:
+            continue
+        elapsed = (now - slot.notified_at).total_seconds()
+        remaining = max(0.0, settings.CONFIRM_TIMEOUT_SECONDS - elapsed)
+        _schedule_timeout(slot.player_id, game.id, delay_seconds=remaining)
+
+    logger.info(
+        f"fill_wait applied for game {game.id}: "
+        f"timeout extended to {settings.CONFIRM_TIMEOUT_SECONDS}s, "
+        f"{len(existing_pending) + 1} pending timers rescheduled."
+    )
+
+
 def fill_slot(db: Session, game: Game, allow_requeue: bool = False) -> bool:
     """Pull the next eligible player from the queue and assign them to the game.
     Returns True if a player was found, False if no eligible player exists.
@@ -301,6 +341,13 @@ def fill_slot(db: Session, game: Game, allow_requeue: bool = False) -> bool:
         already_slotted = {s.player_id for s in game.slots if s.status in active_statuses}
     else:
         already_slotted = {s.player_id for s in game.slots}
+
+    # Snapshot pending slots before adding the new player.  If any exist, the
+    # fill is happening mid-confirmation and we must apply fill_wait.
+    existing_pending = [
+        s for s in game.slots
+        if s.status == SlotStatus.PENDING_CONFIRMATION
+    ]
 
     queue = get_queue(db)
     next_entry = next(
@@ -320,8 +367,12 @@ def fill_slot(db: Session, game: Game, allow_requeue: bool = False) -> bool:
     player_id = next_entry.player_id
     signup_number = next_entry.signup_number
     _remove_from_queue(db, player_id)
-    _create_slot_and_notify(db, game, player_id, signup_number)
+    new_slot = _create_slot_and_notify(db, game, player_id, signup_number)
     db.expire(game)  # force slots to reload on next access
+
+    if existing_pending:
+        _apply_fill_wait(db, game, new_slot, existing_pending)
+
     return True
 
 

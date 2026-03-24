@@ -64,8 +64,18 @@ export const leaveGame = (gameId: number, secretToken: string) =>
 // Settings
 export const getSettings = () =>
   api.get("/settings").then((r) => r.data);
-export const updateSettings = (confirm_timeout_seconds: number, operatorSecret: string) =>
-  api.patch("/settings", { confirm_timeout_seconds }, { headers: { "X-Operator-Secret": operatorSecret } }).then((r) => r.data);
+export const updateSettings = (
+  confirm_timeout_seconds: number,
+  fill_wait_seconds: number,
+  operatorSecret: string,
+) =>
+  api
+    .patch(
+      "/settings",
+      { confirm_timeout_seconds, fill_wait_seconds },
+      { headers: { "X-Operator-Secret": operatorSecret } },
+    )
+    .then((r) => r.data);
 
 // Confirmation
 export const confirm = (player_id: number, game_id: number, response: string, secret_token: string) =>

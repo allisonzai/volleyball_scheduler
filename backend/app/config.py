@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./volleyball.db"
     MAX_PLAYERS: int = 12
     CONFIRM_TIMEOUT_SECONDS: int = 300  # 5 minutes
+    FILL_WAIT_SECONDS: int = 60  # extra time granted when a replacement is filled
     VERIFICATION_EXPIRES_MINUTES: int = 15
 
     STUB_SMS: bool = True

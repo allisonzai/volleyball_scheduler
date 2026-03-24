@@ -1509,3 +1509,90 @@ class TestScenario19_QueueDefer:
         queue = scheduler.get_queue(db)
         ids = [e.player_id for e in queue]
         assert ids == [p1.id, p3.id, p2.id, p4.id], f"Expected p1,p3,p2,p4 but got {ids}"
+
+
+# ── SCENARIO 20 ──────────────────────────────────────────────────────────────
+# Fill-wait: when a replacement player is drawn mid-confirmation, their timer
+# is set to (remaining + FILL_WAIT_SECONDS) and CONFIRM_TIMEOUT_SECONDS is
+# increased by FILL_WAIT_SECONDS.
+
+class TestScenario20_FillWait:
+    def test_fill_wait_extends_timeout_on_defer(self, db):
+        """Deferring mid-confirmation increases CONFIRM_TIMEOUT_SECONDS by
+        FILL_WAIT_SECONDS and backdates the new slot's notified_at."""
+        settings.MAX_PLAYERS = 2
+        settings.CONFIRM_TIMEOUT_SECONDS = 300
+        settings.FILL_WAIT_SECONDS = 60
+
+        p1 = register_and_queue(db, 1)
+        p2 = register_and_queue(db, 2)
+        p3 = register_and_queue(db, 3)  # waiting in queue
+
+        game = scheduler.assign_next_game(db)
+        db.commit()
+
+        original_timeout = settings.CONFIRM_TIMEOUT_SECONDS  # 300
+
+        # p1 defers — p3 should be filled in, with fill_wait applied
+        scheduler.handle_confirmation(p1.id, game.id, "defer", db)
+        db.commit()
+
+        # Global timeout must have grown by FILL_WAIT_SECONDS
+        assert settings.CONFIRM_TIMEOUT_SECONDS == original_timeout + 60, (
+            f"Expected timeout {original_timeout + 60}s, "
+            f"got {settings.CONFIRM_TIMEOUT_SECONDS}s"
+        )
+
+        # The new slot (p3) must have the same notified_at as the existing
+        # pending slot (p2), not a fresh timestamp
+        db.expire(game)
+        p2_slot = next(s for s in game.slots if s.player_id == p2.id)
+        p3_slot = next(s for s in game.slots if s.player_id == p3.id)
+
+        assert p3_slot.notified_at == p2_slot.notified_at, (
+            "New slot's notified_at should match existing pending slot so "
+            "clients show the same countdown"
+        )
+
+    def test_fill_wait_not_applied_during_batch_fill(self, db):
+        """Batch fill (all pending resolved, then fill) must NOT apply
+        fill_wait — no pre-existing pending slots at fill time."""
+        settings.MAX_PLAYERS = 2
+        settings.CONFIRM_TIMEOUT_SECONDS = 300
+        settings.FILL_WAIT_SECONDS = 60
+
+        p1 = register_and_queue(db, 1)
+        p2 = register_and_queue(db, 2)
+        p3 = register_and_queue(db, 3)
+
+        game = scheduler.assign_next_game(db)
+        db.commit()
+
+        # Both p1 and p2 decline — batch fill draws p3 with no pending slots
+        scheduler.handle_confirmation(p1.id, game.id, "no", db)
+        scheduler.handle_confirmation(p2.id, game.id, "no", db)
+        db.commit()
+
+        # Timeout should NOT have increased
+        assert settings.CONFIRM_TIMEOUT_SECONDS == 300, (
+            "fill_wait must not apply during batch fill"
+        )
+
+    def test_fill_wait_zero_leaves_timeout_unchanged(self, db):
+        """When FILL_WAIT_SECONDS=0, timeout does not change on fill."""
+        settings.MAX_PLAYERS = 2
+        settings.CONFIRM_TIMEOUT_SECONDS = 300
+        settings.FILL_WAIT_SECONDS = 0
+
+        register_and_queue(db, 1)
+        register_and_queue(db, 2)
+        register_and_queue(db, 3)
+
+        game = scheduler.assign_next_game(db)
+        db.commit()
+
+        p1_id = game.slots[0].player_id
+        scheduler.handle_confirmation(p1_id, game.id, "defer", db)
+        db.commit()
+
+        assert settings.CONFIRM_TIMEOUT_SECONDS == 300

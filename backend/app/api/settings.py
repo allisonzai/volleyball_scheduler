@@ -19,17 +19,20 @@ def _require_operator(token: Optional[str]) -> None:
 
 class SettingsOut(BaseModel):
     confirm_timeout_seconds: int
+    fill_wait_seconds: int
     max_players: int
 
 
 class SettingsPatch(BaseModel):
     confirm_timeout_seconds: Optional[int] = None
+    fill_wait_seconds: Optional[int] = None
 
 
 @router.get("", response_model=SettingsOut)
 def get_settings():
     return SettingsOut(
         confirm_timeout_seconds=settings.CONFIRM_TIMEOUT_SECONDS,
+        fill_wait_seconds=settings.FILL_WAIT_SECONDS,
         max_players=settings.MAX_PLAYERS,
     )
 
@@ -48,7 +51,13 @@ def update_settings(
         settings.CONFIRM_TIMEOUT_SECONDS = body.confirm_timeout_seconds
         scheduler.reschedule_pending_timeouts(db, body.confirm_timeout_seconds)
 
+    if body.fill_wait_seconds is not None:
+        if body.fill_wait_seconds < 0:
+            raise HTTPException(400, "fill_wait_seconds must be >= 0.")
+        settings.FILL_WAIT_SECONDS = body.fill_wait_seconds
+
     return SettingsOut(
         confirm_timeout_seconds=settings.CONFIRM_TIMEOUT_SECONDS,
+        fill_wait_seconds=settings.FILL_WAIT_SECONDS,
         max_players=settings.MAX_PLAYERS,
     )
