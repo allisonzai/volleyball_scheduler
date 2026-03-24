@@ -41,38 +41,41 @@ export default function WaitingListView({ queue, currentPlayerId, currentPlayer,
       {queue.length === 0 ? (
         <p className="text-gray-400 text-sm text-center py-4">No players waiting.</p>
       ) : (
-        <div className="space-y-2">
-          {queue.map((entry, idx) => (
-            <div key={entry.player_id} className="flex items-center gap-2">
-              <span className="text-xs text-gray-400 w-5 text-right">{idx + 1}.</span>
-              <div className="flex-1 flex items-center gap-1.5">
-                <PlayerBadge
-                  displayName={entry.display_name}
-                  signupNumber={entry.signup_number}
-                  highlight={entry.player_id === currentPlayerId}
-                />
-                {entry.player_id === currentPlayerId && currentPlayerResponse === "defer" && (
-                  <span className="text-xs font-bold text-blue-500 border border-blue-300 rounded px-1 py-0.5 leading-none">D</span>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+          {queue.map((entry, idx) => {
+            const isMe = entry.player_id === currentPlayerId;
+            return (
+              <div key={entry.player_id} className="flex flex-col gap-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-400 w-5 shrink-0 text-right">{idx + 1}.</span>
+                  <PlayerBadge
+                    displayName={entry.display_name}
+                    signupNumber={entry.signup_number}
+                    highlight={isMe}
+                  />
+                  {isMe && currentPlayerResponse === "defer" && (
+                    <span className="text-xs font-bold text-blue-500 border border-blue-300 rounded px-1 py-0.5 leading-none shrink-0">D</span>
+                  )}
+                </div>
+                {isMe && (
+                  <div className="flex gap-1.5 pl-6">
+                    <button
+                      onClick={() => handleDefer(entry.player_id)}
+                      className="text-xs text-yellow-500 hover:text-yellow-700 px-2 py-0.5 rounded border border-yellow-200 hover:border-yellow-400 transition"
+                    >
+                      Defer
+                    </button>
+                    <button
+                      onClick={() => handleLeave(entry.player_id)}
+                      className="text-xs text-red-400 hover:text-red-600 px-2 py-0.5 rounded border border-red-200 hover:border-red-400 transition"
+                    >
+                      Leave
+                    </button>
+                  </div>
                 )}
               </div>
-              {entry.player_id === currentPlayerId && (
-                <>
-                  <button
-                    onClick={() => handleDefer(entry.player_id)}
-                    className="text-xs text-yellow-500 hover:text-yellow-700 px-2 py-1 rounded border border-yellow-200 hover:border-yellow-400 transition"
-                  >
-                    Defer
-                  </button>
-                  <button
-                    onClick={() => handleLeave(entry.player_id)}
-                    className="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded border border-red-200 hover:border-red-400 transition"
-                  >
-                    Leave
-                  </button>
-                </>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
