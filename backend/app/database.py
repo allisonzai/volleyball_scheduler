@@ -32,9 +32,16 @@ def _migrate_db() -> None:
     """Apply any additive schema migrations that create_all won't handle
     (i.e. new columns on existing tables)."""
     from sqlalchemy import text
+    migrations = [
+        "ALTER TABLE games ADD COLUMN game_number INTEGER",
+        "ALTER TABLE players ADD COLUMN password_hash VARCHAR(256) NOT NULL DEFAULT ''",
+        "ALTER TABLE players ADD COLUMN verification_code VARCHAR(6)",
+        "ALTER TABLE players ADD COLUMN verification_expires_at DATETIME",
+    ]
     with engine.connect() as conn:
-        try:
-            conn.execute(text("ALTER TABLE games ADD COLUMN game_number INTEGER"))
-            conn.commit()
-        except Exception:
-            pass  # column already exists
+        for stmt in migrations:
+            try:
+                conn.execute(text(stmt))
+                conn.commit()
+            except Exception:
+                pass  # column already exists
