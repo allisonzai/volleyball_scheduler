@@ -227,6 +227,7 @@ export default function Home() {
                   queue={queue}
                   currentPlayerId={player?.id}
                   currentPlayer={player}
+                  currentPlayerResponse={playerResponse}
                   onRefresh={refresh}
                 />
               </>

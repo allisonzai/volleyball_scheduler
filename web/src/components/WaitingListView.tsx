@@ -6,10 +6,11 @@ interface Props {
   queue: QueueEntry[];
   currentPlayerId?: number | null;
   currentPlayer?: Player | null;
+  currentPlayerResponse?: "yes" | "no" | "defer" | null;
   onRefresh: () => void;
 }
 
-export default function WaitingListView({ queue, currentPlayerId, currentPlayer, onRefresh }: Props) {
+export default function WaitingListView({ queue, currentPlayerId, currentPlayer, currentPlayerResponse, onRefresh }: Props) {
   const handleLeave = async (playerId: number) => {
     if (!currentPlayer) return;
     if (!confirm("Leave the waiting list?")) return;
@@ -44,12 +45,15 @@ export default function WaitingListView({ queue, currentPlayerId, currentPlayer,
           {queue.map((entry, idx) => (
             <div key={entry.player_id} className="flex items-center gap-2">
               <span className="text-xs text-gray-400 w-5 text-right">{idx + 1}.</span>
-              <div className="flex-1">
+              <div className="flex-1 flex items-center gap-1.5">
                 <PlayerBadge
                   displayName={entry.display_name}
                   signupNumber={entry.signup_number}
                   highlight={entry.player_id === currentPlayerId}
                 />
+                {entry.player_id === currentPlayerId && currentPlayerResponse === "defer" && (
+                  <span className="text-xs font-bold text-blue-500 border border-blue-300 rounded px-1 py-0.5 leading-none">D</span>
+                )}
               </div>
               {entry.player_id === currentPlayerId && (
                 <>
