@@ -73,8 +73,8 @@ export default function ConfirmationBanner({ game, slot, playerId, playerToken, 
       </div>
       <p className={`text-xs mt-3 text-center ${urgent ? "text-red-500 font-medium" : "text-yellow-600"}`}>
         {secondsLeft <= 0
-          ? "Time's up — you've been moved to the end of the queue."
-          : "No response = treated as No (moved to end of queue)."}
+          ? "Time's up — you've been removed from the game and waiting list."
+          : "No response = treated as No — you'll be removed from the game and waiting list."}
       </p>
     </div>
   );
