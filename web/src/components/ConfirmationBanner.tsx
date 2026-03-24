@@ -12,8 +12,15 @@ interface Props {
   onDone: () => void;
 }
 
+const CHOICE_LABELS: Record<string, { label: string; color: string; bg: string }> = {
+  yes:   { label: "✓ You're in — see you on the court!",  color: "text-green-700", bg: "bg-green-50 border-green-400" },
+  no:    { label: "✗ Skipped — you've been removed from the game and waiting list.", color: "text-red-600",   bg: "bg-red-50 border-red-300"   },
+  defer: { label: "⇄ Deferred — you've been swapped with the next player.",          color: "text-blue-700",  bg: "bg-blue-50 border-blue-400"  },
+};
+
 export default function ConfirmationBanner({ game, slot, playerId, playerToken, timeoutSeconds, onDone }: Props) {
   const [loading, setLoading] = useState(false);
+  const [chosen, setChosen] = useState<"yes" | "no" | "defer" | null>(null);
   const secondsLeft = useCountdown(slot.notified_at, timeoutSeconds);
 
   const urgent = secondsLeft <= 60;
@@ -22,13 +29,25 @@ export default function ConfirmationBanner({ game, slot, playerId, playerToken, 
     setLoading(true);
     try {
       await confirm(playerId, game.id, response, playerToken);
-      onDone();
+      setChosen(response);
+      setTimeout(onDone, 1500);
     } catch {
       alert("Failed to submit response. Try again.");
-    } finally {
       setLoading(false);
     }
   };
+
+  if (chosen) {
+    const { label, color, bg } = CHOICE_LABELS[chosen];
+    return (
+      <div className={`border-2 rounded-2xl p-5 mb-4 shadow-lg ${bg}`}>
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">🏐</span>
+          <p className={`font-semibold text-base ${color}`}>{label}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`border-2 rounded-2xl p-5 mb-4 shadow-lg ${urgent ? "bg-red-50 border-red-400" : "bg-yellow-50 border-yellow-400"}`}>
