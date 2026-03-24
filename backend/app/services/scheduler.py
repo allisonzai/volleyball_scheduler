@@ -473,7 +473,7 @@ def handle_confirmation(player_id: int, game_id: int, response: str, db: Session
         logger.info(f"Player {player_id} declined game {game_id} — removed from queue.")
 
     elif response == "defer":
-        slot.status = SlotStatus.DECLINED
+        slot.status = SlotStatus.DEFERRED
         db.flush()
         log_event(db, "player_deferred", f"{player_name} deferred — moved back in queue.",
                   game_id=game_id, game_number=gnum)

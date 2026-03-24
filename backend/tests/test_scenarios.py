@@ -757,7 +757,7 @@ class TestScenario10_ConfirmNo:
 #  current game."
 
 class TestScenario11_ConfirmDefer:
-    def test_defer_sets_slot_declined(self, db):
+    def test_defer_sets_slot_deferred(self, db):
         for i in range(1, 14):
             register_and_queue(db, i)
         game = scheduler.assign_next_game(db)
@@ -768,7 +768,7 @@ class TestScenario11_ConfirmDefer:
         db.commit()
 
         db.refresh(slot)
-        assert slot.status == SlotStatus.DECLINED
+        assert slot.status == SlotStatus.DEFERRED
 
     def test_defer_swaps_player_to_position_of_first_eligible(self, db):
         # 14 players: 12 slotted, 2 in queue (p13, p14).

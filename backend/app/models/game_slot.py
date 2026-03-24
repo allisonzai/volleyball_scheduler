@@ -11,6 +11,7 @@ class SlotStatus(str, Enum):
     PENDING_CONFIRMATION = "pending_confirmation"
     CONFIRMED = "confirmed"
     DECLINED = "declined"
+    DEFERRED = "deferred"
     TIMED_OUT = "timed_out"
     WITHDRAWN = "withdrawn"
 
