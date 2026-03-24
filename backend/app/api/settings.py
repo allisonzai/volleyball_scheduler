@@ -1,10 +1,13 @@
 from __future__ import annotations
 import secrets as _secrets
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.config import settings
+from app.database import get_db
+from app.services import scheduler
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -35,6 +38,7 @@ def get_settings():
 def update_settings(
     body: SettingsPatch,
     x_operator_secret: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
 ):
     _require_operator(x_operator_secret)
 
@@ -42,6 +46,7 @@ def update_settings(
         if body.confirm_timeout_seconds < 30:
             raise HTTPException(400, "confirm_timeout_seconds must be at least 30.")
         settings.CONFIRM_TIMEOUT_SECONDS = body.confirm_timeout_seconds
+        scheduler.reschedule_pending_timeouts(db, body.confirm_timeout_seconds)
 
     return SettingsOut(
         confirm_timeout_seconds=settings.CONFIRM_TIMEOUT_SECONDS,

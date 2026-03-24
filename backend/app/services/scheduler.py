@@ -167,9 +167,13 @@ def _cancel_timeout(player_id: int, game_id: int) -> None:
         timer.cancel()
 
 
-def _schedule_timeout(player_id: int, game_id: int) -> None:
-    """Schedule a confirmation timeout for this player/game pair."""
+def _schedule_timeout(player_id: int, game_id: int, delay_seconds: Optional[float] = None) -> None:
+    """Schedule a confirmation timeout for this player/game pair.
+    Uses settings.CONFIRM_TIMEOUT_SECONDS if delay_seconds is not provided."""
     from app.database import SessionLocal
+
+    if delay_seconds is None:
+        delay_seconds = settings.CONFIRM_TIMEOUT_SECONDS
 
     def _timeout_job():
         db = SessionLocal()
@@ -189,10 +193,36 @@ def _schedule_timeout(player_id: int, game_id: int) -> None:
     if existing is not None:
         existing.cancel()
 
-    timer = threading.Timer(settings.CONFIRM_TIMEOUT_SECONDS, _timeout_job)
+    timer = threading.Timer(delay_seconds, _timeout_job)
     timer.daemon = True
     timer.start()
     _timeout_tasks[key] = timer
+
+
+def reschedule_pending_timeouts(db: Session, new_timeout_seconds: int) -> None:
+    """Called when the operator changes the confirmation timeout.
+    Cancels every in-flight pending timer and reschedules it so the remaining
+    time reflects the new setting.  Players who have already exceeded the new
+    timeout are fired immediately (remaining = 0)."""
+    active_games = (
+        db.query(Game)
+        .filter(Game.status.in_([GameStatus.OPEN, GameStatus.IN_PROGRESS]))
+        .all()
+    )
+    now = datetime.utcnow()
+    for game in active_games:
+        for slot in game.slots:
+            if slot.status != SlotStatus.PENDING_CONFIRMATION:
+                continue
+            if slot.notified_at is None:
+                continue
+            elapsed = (now - slot.notified_at).total_seconds()
+            remaining = max(0.0, new_timeout_seconds - elapsed)
+            _schedule_timeout(slot.player_id, game.id, delay_seconds=remaining)
+            logger.info(
+                f"Rescheduled timeout for player {slot.player_id} game {game.id}: "
+                f"{remaining:.1f}s remaining"
+            )
 
 
 # ---------------------------------------------------------------------------
