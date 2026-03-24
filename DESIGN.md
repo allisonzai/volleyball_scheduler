@@ -135,6 +135,7 @@ volleyball_scheduler/
 │   │   │   ├── notifications.py  # /api/confirm + /api/sms/webhook
 │   │   │   ├── settings.py       # /api/settings GET + PATCH
 │   │   │   ├── activity.py       # /api/activity (event log)
+│   │   │   ├── feedback.py       # /api/feedback (submit feedback via email)
 │   │   │   └── events.py         # /api/events (SSE — backend only; not used by web)
 │   │   ├── services/
 │   │   │   ├── scheduler.py      # Core scheduling engine (threading.Timer timeouts)
@@ -159,12 +160,13 @@ volleyball_scheduler/
 │   │   │   ├── ConfirmationBanner.tsx
 │   │   │   ├── PastGamesView.tsx
 │   │   │   ├── ActivityView.tsx      # Event log timeline (Events tab)
+│   │   │   ├── FeedbackView.tsx      # Feedback form (Feedback tab)
 │   │   │   ├── PlayerBadge.tsx
 │   │   │   └── PlayerRegistration.tsx
 │   │   ├── hooks/
 │   │   │   ├── useGameState.ts   # 5-second polling hook; also fetches settings
 │   │   │   └── usePlayer.ts      # localStorage-persisted player
-│   │   └── pages/Home.tsx        # Single-page layout (Live / Past Games / Events tabs)
+│   │   └── pages/Home.tsx        # Single-page layout (Live / History / Events / Feedback tabs)
 │   └── package.json
 │
 └── mobile/
@@ -743,6 +745,23 @@ all remaining entries as `1, 2, 3, …N` to prevent gaps.
 `game_ended`, `player_confirmed`, `player_declined`, `player_deferred`,
 `player_timed_out`, `player_filled`, `player_left`, `settings_updated`.
 
+### Feedback
+
+| Method | Path             | Auth | Description                                               |
+| ------ | ---------------- | ---- | --------------------------------------------------------- |
+| `POST` | `/api/feedback`  | None | Forward a feedback submission to the `FEEDBACK_TO` email. |
+
+**Request body:**
+
+```json
+{ "sender": "Alice or alice@example.com", "subject": "Bug report", "content": "…" }
+```
+
+All three fields are required. The email is sent via Resend with `reply_to` set to
+`sender`. If `STUB_EMAIL=true` the submission is logged instead of sent. If
+`FEEDBACK_TO` is not configured the submission is silently dropped with a server-side
+warning.
+
 ### Confirmation
 
 | Method | Path               | Description                                            |
@@ -1005,6 +1024,7 @@ Pydantic `BaseSettings`.
 | `TWILIO_FROM_NUMBER`      | _(empty)_                   | Twilio sender phone number (E.164 format)                   |
 | `RESEND_API_KEY`          | _(empty)_                   | Resend API key (required when `STUB_EMAIL=false`)           |
 | `EMAIL_FROM`              | _(empty)_                   | Sender email address for Resend                             |
+| `FEEDBACK_TO`             | _(empty)_                   | Recipient address for feedback form submissions             |
 | `BASE_URL`                | `http://localhost:8000`     | Public-facing URL embedded in SMS messages                  |
 
 **Web frontend (`.env` / Vercel env vars):**

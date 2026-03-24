@@ -39,6 +39,8 @@ backend, React web frontend, and React Native mobile app (iOS + Android).
 - Past game history with optional clear
 - **Event log** — timestamped feed of all game and player activity,
   visible in the "Events" tab
+- **Feedback tab** — sender / subject / message form; submissions are
+  forwarded by email to the configured `FEEDBACK_TO` address via Resend
 - Operator controls: Start Staging, Begin Game, End Game, Start Over,
   Clear History
 
@@ -125,6 +127,7 @@ EXPO_PUBLIC_API_URL=http://192.168.1.100:8000 npx expo start
 | `TWILIO_AUTH_TOKEN`       | —                           | Twilio credentials                         |
 | `TWILIO_FROM_NUMBER`      | —                           | Your Twilio phone number                   |
 | `RESEND_API_KEY`          | —                           | Resend API key (when `STUB_EMAIL=false`)   |
+| `FEEDBACK_TO`             | —                           | Recipient address for feedback submissions |
 | `BASE_URL`                | `http://localhost:8000`     | Public URL (for SMS links)                 |
 
 ### Web frontend (Vercel env vars or `web/.env`)
@@ -162,6 +165,8 @@ EXPO_PUBLIC_API_URL=http://192.168.1.100:8000 npx expo start
 | GET    | `/api/settings`                | —                | Get current settings                             |
 | PATCH  | `/api/settings`                | Operator secret  | Update confirm timeout and fill-wait             |
 | GET    | `/api/activity`                | —                | Event log (newest first, `?limit=200`)           |
+| DELETE | `/api/activity`                | Operator secret  | Clear event log                                  |
+| POST   | `/api/feedback`                | —                | Submit feedback (emailed to `FEEDBACK_TO`)        |
 
 ---
 
