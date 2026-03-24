@@ -287,10 +287,7 @@ def _try_fill_open_slots(db: Session, game: Game) -> None:
     needed = game.max_players - confirmed
 
     if needed <= 0:
-        # Full house of confirmed players — start the game
-        if game.status == GameStatus.OPEN:
-            _begin_game(db, game)
-        return
+        return  # all spots confirmed — operator will begin the game
 
     # Batch-fill: pull up to `needed` replacements from the queue at once.
     # Use allow_requeue=True so deferred players who were re-inserted into the
@@ -373,11 +370,7 @@ def fill_slot(db: Session, game: Game, allow_requeue: bool = False, apply_fill_w
     )
 
     if next_entry is None:
-        # No eligible players — start with whoever confirmed so far
-        confirmed = _confirmed_count(game)
-        if confirmed > 0 and game.status == GameStatus.OPEN:
-            _begin_game(db, game)
-        return False
+        return False  # queue exhausted — operator will begin the game
 
     player_id = next_entry.player_id
     signup_number = next_entry.signup_number
