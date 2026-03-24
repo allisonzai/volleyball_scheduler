@@ -310,33 +310,33 @@ def _apply_fill_wait(
     """Called when a replacement player is added during an active confirmation
     phase (i.e. other slots are still pending).
 
-    - Backdates new_slot.notified_at to match the earliest pending slot so
-      every player's client-side countdown formula yields the same reference.
-    - Increases CONFIRM_TIMEOUT_SECONDS by FILL_WAIT_SECONDS so the new
-      player (and all remaining pending players) get extra time.
-    - Reschedules all pending timers to reflect the new timeout.
+    Computes the minimum remaining time among existing pending players, then
+    sets the new global timeout to (min_remaining + FILL_WAIT_SECONDS) and
+    resets every pending player's notified_at to now so all timers count down
+    from the same fresh reference point.
     """
-    refs = [s.notified_at for s in existing_pending if s.notified_at is not None]
-    if not refs:
+    now = datetime.utcnow()
+
+    remaining_times = [
+        max(0.0, settings.CONFIRM_TIMEOUT_SECONDS - (now - s.notified_at).total_seconds())
+        for s in existing_pending
+        if s.notified_at is not None
+    ]
+    if not remaining_times:
         return
 
-    earliest = min(refs)
-    new_slot.notified_at = earliest
-    db.flush()
+    min_remaining = min(remaining_times)
+    new_timeout = int(min_remaining) + settings.FILL_WAIT_SECONDS
+    settings.CONFIRM_TIMEOUT_SECONDS = new_timeout
 
-    settings.CONFIRM_TIMEOUT_SECONDS += settings.FILL_WAIT_SECONDS
-
-    now = datetime.utcnow()
     for slot in existing_pending + [new_slot]:
-        if slot.notified_at is None:
-            continue
-        elapsed = (now - slot.notified_at).total_seconds()
-        remaining = max(0.0, settings.CONFIRM_TIMEOUT_SECONDS - elapsed)
-        _schedule_timeout(slot.player_id, game.id, delay_seconds=remaining)
+        slot.notified_at = now
+        _schedule_timeout(slot.player_id, game.id, delay_seconds=new_timeout)
+    db.flush()
 
     logger.info(
         f"fill_wait applied for game {game.id}: "
-        f"timeout extended to {settings.CONFIRM_TIMEOUT_SECONDS}s, "
+        f"min_remaining={min_remaining:.1f}s, new timeout={new_timeout}s, "
         f"{len(existing_pending) + 1} pending timers rescheduled."
     )
 
