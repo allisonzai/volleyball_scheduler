@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getActivity } from "../api/client";
+import { getActivity, clearActivity } from "../api/client";
 import type { EventEntry } from "../types";
 
 const TYPE_STYLE: Record<string, { dot: string; text: string }> = {
@@ -21,12 +21,26 @@ const DEFAULT_STYLE = { dot: "bg-gray-300", text: "text-gray-600" };
 export default function ActivityView() {
   const [events, setEvents] = useState<EventEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const operatorSecret = import.meta.env.VITE_OPERATOR_SECRET as string;
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true);
     getActivity()
       .then(setEvents)
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleClear = async () => {
+    if (!confirm("Delete all event log entries? This cannot be undone.")) return;
+    try {
+      await clearActivity(operatorSecret);
+      setEvents([]);
+    } catch {
+      alert("Could not clear event log.");
+    }
+  };
 
   if (loading) {
     return <div className="text-center text-gray-400 py-8">Loading…</div>;
@@ -34,7 +48,17 @@ export default function ActivityView() {
 
   return (
     <div className="bg-white rounded-2xl shadow p-5">
-      <h2 className="text-lg font-bold text-gray-800 mb-4">Event Log</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-bold text-gray-800">Event Log</h2>
+        {events.length > 0 && (
+          <button
+            onClick={handleClear}
+            className="text-xs text-red-400 hover:text-red-600 underline"
+          >
+            Clear History
+          </button>
+        )}
+      </div>
       {events.length === 0 ? (
         <p className="text-gray-400 text-sm text-center py-4">No events yet.</p>
       ) : (

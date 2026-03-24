@@ -82,6 +82,8 @@ export const updateSettings = (
 // Activity log
 export const getActivity = (limit = 200) =>
   api.get("/activity", { params: { limit } }).then((r) => r.data);
+export const clearActivity = (operatorSecret: string) =>
+  api.delete("/activity", { headers: { "X-Operator-Secret": operatorSecret } });
 
 // Confirmation
 export const confirm = (player_id: number, game_id: number, response: string, secret_token: string) =>

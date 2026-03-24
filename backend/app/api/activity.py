@@ -2,10 +2,13 @@ from __future__ import annotations
 from typing import List, Optional
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+import secrets as _secrets
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from typing import Optional as _Optional
 
+from app.config import settings
 from app.database import get_db
 from app.models.event_log import EventLog
 
@@ -35,3 +38,16 @@ def get_activity(
         .all()
     )
     return events
+
+
+@router.delete("", status_code=204)
+def clear_activity(
+    x_operator_secret: _Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    if not x_operator_secret or not _secrets.compare_digest(
+        x_operator_secret, settings.OPERATOR_SECRET
+    ):
+        raise HTTPException(401, "Invalid or missing operator secret.")
+    db.query(EventLog).delete()
+    db.commit()
