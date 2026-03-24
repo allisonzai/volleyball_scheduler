@@ -32,13 +32,9 @@
 11. If they confirm **no** (or do not respond within the timeout), they will be
     taken out of the current game and not be added to the waiting list. The
     first person in the waiting list who has not already deferred for the
-    current game will be selected as a replacement. Replacements are not pulled
-    one-by-one — the system waits until **all** pending slots are resolved, then
-    batch-fills all vacant spots from the queue at once. If the queue (including
-    deferred players who were re-inserted) is smaller than the number of vacant
-    spots, all available queue players are added. The game starts once at least
-    one player in the new batch confirms; if no one confirms and the queue is
-    empty, the game remains open until the operator clicks Start Over.
+    current game will be selected as a replacement immediately. If the queue
+    (including deferred players who were re-inserted) is empty, the slot stays
+    vacant until the operator clicks Begin Game or Start Over.
 12. If they confirm **defer**, they will be taken out of the current game and
     swapped with the first person in the waiting list who has not already
     deferred for the current game. The deferred player is re-inserted into the
@@ -102,21 +98,19 @@ A game goes through two explicit phases:
    are replaced automatically. A permanent game number is **not** yet
    assigned; cancelled staging sessions consume no number.
 
-2. **Gaming phase** (status: `in_progress`) — the game starts and a game
+2. **Gaming phase** (status: `in_progress`) — operator clicks **Begin Game** to start a game and a game
    number is assigned when:
    - All player slots are confirmed, **or**
    - The queue is exhausted and at least one player has confirmed.
 
-   The operator may also force the transition early with **Begin Game**,
-   which cancels any still-pending slots.
-
 ## Fill-Wait
 
 When a replacement player is drawn from the queue while other slots are
-still pending confirmation, the system extends the global confirmation
-timeout by `FILL_WAIT_SECONDS` (default 60 s) so the new player gets
-adequate time. The replacement player's timer is backdated to match the
-earliest pending slot so all pending players share the same countdown.
+still pending confirmation, the system computes the minimum remaining time
+among the existing pending players, sets the new global confirmation timeout
+to `min_remaining + FILL_WAIT_SECONDS`, and resets every pending player's
+(including the replacement's) `notified_at` to now. All pending players
+share the same fresh countdown from that moment.
 
 ## Operator Controls
 
