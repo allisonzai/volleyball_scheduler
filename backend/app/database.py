@@ -23,7 +23,7 @@ def get_db():
 
 
 def init_db():
-    from app.models import player, game, game_slot, waiting_list  # noqa: F401
+    from app.models import player, game, game_slot, waiting_list, event_log  # noqa: F401
     Base.metadata.create_all(bind=engine)
     _migrate_db()
 

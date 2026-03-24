@@ -8,6 +8,7 @@ from typing import Optional
 from app.config import settings
 from app.database import get_db
 from app.services import scheduler
+from app.services.event_logger import log_event
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -55,6 +56,13 @@ def update_settings(
         if body.fill_wait_seconds < 0:
             raise HTTPException(400, "fill_wait_seconds must be >= 0.")
         settings.FILL_WAIT_SECONDS = body.fill_wait_seconds
+
+    log_event(
+        db, "settings_updated",
+        f"Settings updated — confirm timeout: "
+        f"{settings.CONFIRM_TIMEOUT_SECONDS}s, "
+        f"fill wait: {settings.FILL_WAIT_SECONDS}s.",
+    )
 
     return SettingsOut(
         confirm_timeout_seconds=settings.CONFIRM_TIMEOUT_SECONDS,

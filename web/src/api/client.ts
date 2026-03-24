@@ -79,6 +79,10 @@ export const updateSettings = (
     )
     .then((r) => r.data);
 
+// Activity log
+export const getActivity = (limit = 200) =>
+  api.get("/activity", { params: { limit } }).then((r) => r.data);
+
 // Confirmation
 export const confirm = (player_id: number, game_id: number, response: string, secret_token: string) =>
   api.post("/confirm", { player_id, game_id, response }, { headers: { "X-Player-Token": secret_token } }).then((r) => r.data);

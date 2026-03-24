@@ -16,6 +16,7 @@ from app.config import settings
 from app.models.game import Game, GameStatus
 from app.models.game_slot import GameSlot, SlotStatus
 from app.models.waiting_list import WaitingList
+from app.services.event_logger import log_event
 from app.services.notifications import notify_player
 
 logger = logging.getLogger(__name__)
@@ -152,6 +153,10 @@ def _begin_game(db: Session, game: Game) -> None:
     game.status = GameStatus.IN_PROGRESS
     game.started_at = datetime.utcnow()
     db.flush()
+    log_event(
+        db, "game_begun", f"Game #{game.game_number} started.",
+        game_id=game.id, game_number=game.game_number,
+    )
 
 
 def _confirmed_count(game: Game) -> int:
@@ -380,6 +385,13 @@ def fill_slot(db: Session, game: Game, allow_requeue: bool = False) -> bool:
     new_slot = _create_slot_and_notify(db, game, player_id, signup_number)
     db.expire(game)  # force slots to reload on next access
 
+    player_name = new_slot.player.display_name if new_slot.player else f"Player {player_id}"
+    log_event(
+        db, "player_filled",
+        f"{player_name} called up from waiting list.",
+        game_id=game.id, game_number=game.game_number,
+    )
+
     if existing_pending:
         _apply_fill_wait(db, game, new_slot, existing_pending)
 
@@ -413,6 +425,7 @@ def assign_next_game(db: Session) -> Optional[Game]:
 
     # Expire and reload so the returned game object has a current .slots collection
     db.expire(game)
+    log_event(db, "game_staged", "Staging started.", game_id=game.id)
     return game
 
 
@@ -438,10 +451,14 @@ def handle_confirmation(player_id: int, game_id: int, response: str, db: Session
     slot.responded_at = datetime.utcnow()
 
     game = db.query(Game).filter(Game.id == game_id).first()
+    gnum = game.game_number if game else None
+    player_name = slot.player.display_name if slot.player else f"Player {player_id}"
 
     if response == "yes":
         slot.status = SlotStatus.CONFIRMED
         db.flush()
+        log_event(db, "player_confirmed", f"{player_name} confirmed.",
+                  game_id=game_id, game_number=gnum)
         _try_fill_open_slots(db, game)
         logger.info(f"Player {player_id} confirmed for game {game_id}.")
 
@@ -449,6 +466,8 @@ def handle_confirmation(player_id: int, game_id: int, response: str, db: Session
         slot.status = SlotStatus.DECLINED
         db.flush()
         _remove_from_queue(db, player_id)
+        log_event(db, "player_declined", f"{player_name} declined — removed from waiting list.",
+                  game_id=game_id, game_number=gnum)
         # Don't fill immediately — wait until all pending slots resolve, then batch-fill
         _try_fill_open_slots(db, game)
         logger.info(f"Player {player_id} declined game {game_id} — removed from queue.")
@@ -456,6 +475,8 @@ def handle_confirmation(player_id: int, game_id: int, response: str, db: Session
     elif response == "defer":
         slot.status = SlotStatus.DECLINED
         db.flush()
+        log_event(db, "player_deferred", f"{player_name} deferred — moved back in queue.",
+                  game_id=game_id, game_number=gnum)
         # fill_slot promotes the first eligible queue player into the vacated slot
         # (and calls db.expire(game) so game.slots reloads on next access).
         # Then re-insert the deferred player right before the next eligible queue
@@ -475,6 +496,13 @@ def handle_timeout(player_id: int, game_id: int, db: Session) -> None:
     )
     if not slot or slot.status != SlotStatus.PENDING_CONFIRMATION:
         return
+    game = db.query(Game).filter(Game.id == game_id).first()
+    player_name = slot.player.display_name if slot.player else f"Player {player_id}"
+    log_event(
+        db, "player_timed_out",
+        f"{player_name} timed out — removed from waiting list.",
+        game_id=game_id, game_number=game.game_number if game else None,
+    )
     logger.info(f"Player {player_id} timed out for game {game_id} — defaulting to 'no'.")
     handle_confirmation(player_id, game_id, "no", db)
 
@@ -502,6 +530,12 @@ def force_start_game(game_id: int, db: Session) -> Game:
             _remove_from_queue(db, slot.player_id)
 
     _begin_game(db, game)
+    log_event(
+        db, "game_force_begun",
+        f"Operator began game #{game.game_number} early "
+        f"({confirmed} confirmed, pending slots cancelled).",
+        game_id=game.id, game_number=game.game_number,
+    )
     logger.info(
         f"Operator force-started game {game_id} with {confirmed} confirmed player(s)."
     )
@@ -517,6 +551,11 @@ def end_game(game_id: int, db: Session) -> Game:
     game.status = GameStatus.FINISHED
     game.ended_at = datetime.utcnow()
     db.flush()
+    log_event(
+        db, "game_ended",
+        f"Game #{game.game_number or game_id} ended.",
+        game_id=game.id, game_number=game.game_number,
+    )
 
     # Cancel any outstanding confirmation timeouts for this game
     for slot in game.slots:
@@ -621,9 +660,15 @@ def leave_game(player_id: int, game_id: int, db: Session) -> None:
     if not game or game.status not in (GameStatus.OPEN, GameStatus.IN_PROGRESS):
         raise LookupError("Game is not active.")
 
+    player_name = slot.player.display_name if slot.player else f"Player {player_id}"
     slot.status = SlotStatus.WITHDRAWN
     slot.responded_at = datetime.utcnow()
     db.flush()
+    log_event(
+        db, "player_left",
+        f"{player_name} left the game.",
+        game_id=game_id, game_number=game.game_number,
+    )
 
     _remove_from_queue(db, player_id)
     fill_slot(db, game)

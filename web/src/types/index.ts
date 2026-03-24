@@ -35,6 +35,15 @@ export interface Game {
   slots: Slot[];
 }
 
+export interface EventEntry {
+  id: number;
+  event_type: string;
+  description: string;
+  game_id: number | null;
+  game_number: number | null;
+  created_at: string;
+}
+
 export interface QueueEntry {
   player_id: number;
   display_name: string;

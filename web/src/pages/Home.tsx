@@ -7,10 +7,11 @@ import WaitingListView from "../components/WaitingListView";
 import PlayerRegistration from "../components/PlayerRegistration";
 import ConfirmationBanner from "../components/ConfirmationBanner";
 import PastGamesView from "../components/PastGamesView";
+import ActivityView from "../components/ActivityView";
 import { joinQueue, startGame, beginGame, endGame, deregisterPlayer, resetAll, updateSettings } from "../api/client";
 import type { Player } from "../types";
 
-type Tab = "live" | "history";
+type Tab = "live" | "history" | "events";
 
 export default function Home() {
   const { player, setPlayer } = usePlayer();
@@ -228,7 +229,7 @@ export default function Home() {
 
         {/* Tab navigation */}
         <div className="flex bg-white rounded-xl shadow overflow-hidden">
-          {(["live", "history"] as Tab[]).map((t) => (
+          {(["live", "history", "events"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -238,7 +239,7 @@ export default function Home() {
                   : "text-gray-600 hover:bg-gray-50"
               }`}
             >
-              {t === "live" ? "Live" : "Past Games"}
+              {t === "live" ? "Live" : t === "history" ? "Past Games" : "Events"}
             </button>
           ))}
         </div>
@@ -342,6 +343,8 @@ export default function Home() {
         )}
 
         {tab === "history" && <PastGamesView />}
+
+        {tab === "events" && <ActivityView />}
       </main>
 
       {/* Footer */}
