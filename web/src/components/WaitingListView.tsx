@@ -48,11 +48,13 @@ export default function WaitingListView({ queue, currentPlayerId, currentPlayer,
               <div key={entry.player_id} className="flex flex-col gap-1">
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-gray-400 w-5 shrink-0 text-right">{idx + 1}.</span>
-                  <PlayerBadge
-                    displayName={entry.display_name}
-                    signupNumber={entry.signup_number}
-                    highlight={isMe}
-                  />
+                  <div className="flex-1 min-w-0">
+                    <PlayerBadge
+                      displayName={entry.display_name}
+                      signupNumber={entry.signup_number}
+                      highlight={isMe}
+                    />
+                  </div>
                   {isMe && currentPlayerResponse === "defer" && (
                     <span className="text-xs font-bold text-blue-500 border border-blue-300 rounded px-1 py-0.5 leading-none shrink-0">D</span>
                   )}

@@ -109,7 +109,7 @@ export default function CourtView({ game, currentPlayerId, currentPlayer, timeou
                 (slot.player_id === currentPlayerId && currentPlayerResponse === "yes");
               return (
                 <div key={slot.id} className="flex items-center gap-2">
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <PlayerBadge
                       displayName={slot.display_name}
                       signupNumber={slot.signup_number}
@@ -137,7 +137,7 @@ export default function CourtView({ game, currentPlayerId, currentPlayer, timeou
           <div className="grid grid-cols-2 gap-2">
             {courtSlots.map((slot) => (
               <div key={slot.id} className="flex items-center gap-2">
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <PlayerBadge
                     displayName={slot.display_name}
                     signupNumber={slot.signup_number}
