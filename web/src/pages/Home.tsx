@@ -116,7 +116,7 @@ export default function Home() {
 
   const handleEnd = async () => {
     if (!game) return;
-    if (!confirm(`End game #${game.id}?`)) return;
+    if (!confirm(`End game #${game.game_number}?`)) return;
     try {
       await endGame(game.id, operatorSecret);
       refresh();
@@ -327,7 +327,7 @@ export default function Home() {
                     onClick={handleEnd}
                     className="flex-1 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium py-2 rounded-xl transition"
                   >
-                    End Game #{game?.id}
+                    End Game #{game?.game_number}
                   </button>
                 )}
                 <button

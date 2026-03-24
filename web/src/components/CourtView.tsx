@@ -90,7 +90,9 @@ export default function CourtView({ game, currentPlayerId, currentPlayer, timeou
   return (
     <div className="bg-white rounded-2xl shadow p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-bold text-gray-800">Current Game #{game.id}</h2>
+        <h2 className="text-lg font-bold text-gray-800">
+          {game.game_number != null ? `Game #${game.game_number}` : "Staging"}
+        </h2>
         <span className={`text-sm font-medium ${statusInfo.color}`}>{statusInfo.label}</span>
       </div>
 

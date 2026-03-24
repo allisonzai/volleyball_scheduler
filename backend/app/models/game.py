@@ -17,6 +17,7 @@ class Game(Base):
     __tablename__ = "games"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    game_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, unique=True)
     status: Mapped[str] = mapped_column(String(20), default=GameStatus.OPEN)
     max_players: Mapped[int] = mapped_column(Integer, default=12)
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

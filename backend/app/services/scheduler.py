@@ -140,6 +140,20 @@ def get_queue(db: Session) -> list[WaitingList]:
 # Game helpers
 # ---------------------------------------------------------------------------
 
+def _next_game_number(db: Session) -> int:
+    """Return the next sequential game number (assigned only when IN_PROGRESS)."""
+    max_num = db.query(func.max(Game.game_number)).scalar()
+    return (max_num or 0) + 1
+
+
+def _begin_game(db: Session, game: Game) -> None:
+    """Transition an OPEN game to IN_PROGRESS and assign its permanent number."""
+    game.game_number = _next_game_number(db)
+    game.status = GameStatus.IN_PROGRESS
+    game.started_at = datetime.utcnow()
+    db.flush()
+
+
 def _confirmed_count(game: Game) -> int:
     return sum(1 for s in game.slots if s.status == SlotStatus.CONFIRMED)
 
@@ -270,9 +284,7 @@ def _try_fill_open_slots(db: Session, game: Game) -> None:
     if needed <= 0:
         # Full house of confirmed players — start the game
         if game.status == GameStatus.OPEN:
-            game.status = GameStatus.IN_PROGRESS
-            game.started_at = datetime.utcnow()
-            db.flush()
+            _begin_game(db, game)
         return
 
     # Batch-fill: pull up to `needed` replacements from the queue at once.
@@ -359,9 +371,7 @@ def fill_slot(db: Session, game: Game, allow_requeue: bool = False) -> bool:
         # No eligible players — start with whoever confirmed so far
         confirmed = _confirmed_count(game)
         if confirmed > 0 and game.status == GameStatus.OPEN:
-            game.status = GameStatus.IN_PROGRESS
-            game.started_at = datetime.utcnow()
-            db.flush()
+            _begin_game(db, game)
         return False
 
     player_id = next_entry.player_id
@@ -491,9 +501,7 @@ def force_start_game(game_id: int, db: Session) -> Game:
             slot.responded_at = datetime.utcnow()
             _remove_from_queue(db, slot.player_id)
 
-    game.status = GameStatus.IN_PROGRESS
-    game.started_at = datetime.utcnow()
-    db.flush()
+    _begin_game(db, game)
     logger.info(
         f"Operator force-started game {game_id} with {confirmed} confirmed player(s)."
     )

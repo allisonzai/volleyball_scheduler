@@ -58,7 +58,7 @@ export default function ConfirmationBanner({ game, slot, playerId, playerToken, 
           <span className="text-2xl">🏐</span>
           <div>
             <p className={`font-bold text-lg ${urgent ? "text-red-800" : "text-yellow-800"}`}>
-              You're up for Game #{game.id}!
+              You're up for the next game!
             </p>
             <p className={`text-sm ${urgent ? "text-red-700" : "text-yellow-700"}`}>
               Confirm your spot to play.

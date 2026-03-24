@@ -25,3 +25,16 @@ def get_db():
 def init_db():
     from app.models import player, game, game_slot, waiting_list  # noqa: F401
     Base.metadata.create_all(bind=engine)
+    _migrate_db()
+
+
+def _migrate_db() -> None:
+    """Apply any additive schema migrations that create_all won't handle
+    (i.e. new columns on existing tables)."""
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE games ADD COLUMN game_number INTEGER"))
+            conn.commit()
+        except Exception:
+            pass  # column already exists

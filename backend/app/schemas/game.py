@@ -20,6 +20,7 @@ class SlotOut(BaseModel):
 
 class GameOut(BaseModel):
     id: int
+    game_number: Optional[int] = None
     status: GameStatus
     max_players: int
     started_at: datetime | None

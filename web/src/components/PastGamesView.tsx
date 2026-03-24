@@ -47,7 +47,9 @@ export default function PastGamesView() {
           {games.map((game) => (
             <div key={game.id} className="bg-white rounded-2xl shadow p-5">
               <div className="flex justify-between items-center mb-3">
-                <h3 className="font-bold text-gray-700">Game #{game.id}</h3>
+                <h3 className="font-bold text-gray-700">
+                  Game #{game.game_number ?? game.id}
+                </h3>
                 <span className="text-xs text-gray-400">
                   {game.started_at
                     ? new Date(game.started_at + "Z").toLocaleString()

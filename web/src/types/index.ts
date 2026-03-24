@@ -26,6 +26,7 @@ export interface Slot {
 
 export interface Game {
   id: number;
+  game_number: number | null;
   status: GameStatus;
   max_players: number;
   started_at: string | null;
