@@ -50,10 +50,10 @@ export default function PastGamesView() {
                 <h3 className="font-bold text-gray-700">Game #{game.id}</h3>
                 <span className="text-xs text-gray-400">
                   {game.started_at
-                    ? new Date(game.started_at).toLocaleString()
+                    ? new Date(game.started_at + "Z").toLocaleString()
                     : "—"}
                   {" → "}
-                  {game.ended_at ? new Date(game.ended_at).toLocaleString() : "ongoing"}
+                  {game.ended_at ? new Date(game.ended_at + "Z").toLocaleString() : "ongoing"}
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-2">
