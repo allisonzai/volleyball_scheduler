@@ -8,6 +8,7 @@ interface Props {
   currentPlayerId?: number | null;
   currentPlayer?: Player | null;
   timeoutSeconds: number;
+  currentPlayerResponse?: "yes" | "no" | "defer" | null;
   onRefresh: () => void;
 }
 
@@ -44,7 +45,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   finished: { label: "Game finished", color: "text-gray-400" },
 };
 
-export default function CourtView({ game, currentPlayerId, currentPlayer, timeoutSeconds, onRefresh }: Props) {
+export default function CourtView({ game, currentPlayerId, currentPlayer, timeoutSeconds, currentPlayerResponse, onRefresh }: Props) {
   const handleLeaveGame = async () => {
     if (!currentPlayer || !game) return;
     if (!confirm("Leave the current game? You'll be removed from the game and waiting list.")) return;
@@ -122,7 +123,15 @@ export default function CourtView({ game, currentPlayerId, currentPlayer, timeou
                     highlight={slot.player_id === currentPlayerId}
                   />
                 </div>
-                <SlotTimer slot={slot} timeoutSeconds={timeoutSeconds} />
+                {slot.player_id === currentPlayerId && currentPlayerResponse === "yes" ? (
+                  <span className="text-green-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </span>
+                ) : (
+                  <SlotTimer slot={slot} timeoutSeconds={timeoutSeconds} />
+                )}
               </div>
             ))}
           </div>

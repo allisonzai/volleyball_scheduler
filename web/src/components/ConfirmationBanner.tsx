@@ -10,6 +10,7 @@ interface Props {
   playerToken: string;
   timeoutSeconds: number;
   onDone: () => void;
+  onResponse?: (r: "yes" | "no" | "defer") => void;
 }
 
 const CHOICE_LABELS: Record<string, { label: string; color: string; bg: string }> = {
@@ -18,7 +19,7 @@ const CHOICE_LABELS: Record<string, { label: string; color: string; bg: string }
   defer: { label: "⇄ Deferred — you've been swapped with the next player.",          color: "text-blue-700",  bg: "bg-blue-50 border-blue-400"  },
 };
 
-export default function ConfirmationBanner({ game, slot, playerId, playerToken, timeoutSeconds, onDone }: Props) {
+export default function ConfirmationBanner({ game, slot, playerId, playerToken, timeoutSeconds, onDone, onResponse }: Props) {
   const [loading, setLoading] = useState(false);
   const [chosen, setChosen] = useState<"yes" | "no" | "defer" | null>(null);
   const secondsLeft = useCountdown(slot.notified_at, timeoutSeconds);
@@ -30,6 +31,7 @@ export default function ConfirmationBanner({ game, slot, playerId, playerToken, 
     try {
       await confirm(playerId, game.id, response, playerToken);
       setChosen(response);
+      onResponse?.(response);
       setTimeout(onDone, 1500);
     } catch {
       alert("Failed to submit response. Try again.");

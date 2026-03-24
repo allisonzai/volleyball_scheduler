@@ -19,6 +19,7 @@ export default function Home() {
   const [showRegister, setShowRegister] = useState(!player);
   const [showQR, setShowQR] = useState(false);
   const [timeoutSeconds, setTimeoutSeconds] = useState(300);
+  const [playerResponse, setPlayerResponse] = useState<"yes" | "no" | "defer" | null>(null);
   const [timeoutInput, setTimeoutInput] = useState("5");
   const [now, setNow] = useState(new Date());
   const pageUrl = window.location.href;
@@ -195,7 +196,7 @@ export default function Home() {
 
         {/* Confirmation banner */}
         {pendingSlot && player && game && (
-          <ConfirmationBanner game={game} slot={pendingSlot} playerId={player.id} playerToken={player.secret_token} timeoutSeconds={timeoutSeconds} onDone={refresh} />
+          <ConfirmationBanner game={game} slot={pendingSlot} playerId={player.id} playerToken={player.secret_token} timeoutSeconds={timeoutSeconds} onDone={() => { setPlayerResponse(null); refresh(); }} onResponse={setPlayerResponse} />
         )}
 
         {/* Tab navigation */}
@@ -221,7 +222,7 @@ export default function Home() {
               <div className="text-center py-12 text-gray-400">Loading…</div>
             ) : (
               <>
-                <CourtView game={game} currentPlayerId={player?.id} currentPlayer={player} timeoutSeconds={timeoutSeconds} onRefresh={refresh} />
+                <CourtView game={game} currentPlayerId={player?.id} currentPlayer={player} timeoutSeconds={timeoutSeconds} currentPlayerResponse={playerResponse} onRefresh={refresh} />
                 <WaitingListView
                   queue={queue}
                   currentPlayerId={player?.id}
